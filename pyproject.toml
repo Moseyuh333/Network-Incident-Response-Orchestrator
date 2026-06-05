@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "network-ir- orchestrator"
+name = "network-ir-orchestrator"
 version = "0.1.0"
 description = "Defensive network incident response orchestrator with LLM-assisted triage"
 readme = "README.md"
@@ -36,9 +36,10 @@ ml = [
 
 [project.scripts]
 niro = "app.main:run"
+niro-pipeline = "scripts.run_pipeline:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["app", "scripts"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
