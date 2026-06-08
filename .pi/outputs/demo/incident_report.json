@@ -1,0 +1,441 @@
+{
+  "metadata": {
+    "generated_at": "2026-06-08T08:17:52+00:00",
+    "generator": "network-ir-orchestrator-offline"
+  },
+  "alert": {
+    "alert_id": "ALERT-09-001",
+    "title": "Possible C2 beaconing and exfiltration",
+    "source_ip": "10.10.5.23",
+    "destination_ip": "203.0.113.77",
+    "timestamp": "2026-06-08T08:30:00+00:00",
+    "severity": "high"
+  },
+  "pipeline": {
+    "topic": "Topic 09 - Network Incident Response Orchestrator",
+    "mode": "parallel",
+    "elapsed_seconds": 0.002233,
+    "stage_1_timings": {
+      "logs": 5.1e-05,
+      "recon": 2e-06,
+      "pcap_features": 1e-06
+    },
+    "stage_2_timings": {
+      "incident_classification": 0.000396,
+      "embedding_profile_score": 0.000356
+    }
+  },
+  "stage_1_collection": {
+    "logs": {
+      "event_count": 18,
+      "sources": [
+        "proxy",
+        "firewall",
+        "edr"
+      ],
+      "events": [
+        {
+          "timestamp": "2026-06-08T08:30:00+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "203.0.113.77",
+          "destination_port": 443,
+          "protocol": "tcp",
+          "event_type": "proxy",
+          "action": "allowed",
+          "url": "https://sync.example.invalid/api/0",
+          "bytes_out": 7500000,
+          "user_agent": "Mozilla/5.0 background-sync"
+        },
+        {
+          "timestamp": "2026-06-08T08:30:10+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "203.0.113.77",
+          "destination_port": 443,
+          "protocol": "tcp",
+          "event_type": "proxy",
+          "action": "allowed",
+          "url": "https://sync.example.invalid/api/1",
+          "bytes_out": 7750000,
+          "user_agent": "Mozilla/5.0 background-sync"
+        },
+        {
+          "timestamp": "2026-06-08T08:30:20+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "203.0.113.77",
+          "destination_port": 443,
+          "protocol": "tcp",
+          "event_type": "proxy",
+          "action": "allowed",
+          "url": "https://sync.example.invalid/api/2",
+          "bytes_out": 8000000,
+          "user_agent": "Mozilla/5.0 background-sync"
+        },
+        {
+          "timestamp": "2026-06-08T08:30:30+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "203.0.113.77",
+          "destination_port": 443,
+          "protocol": "tcp",
+          "event_type": "proxy",
+          "action": "allowed",
+          "url": "https://sync.example.invalid/api/3",
+          "bytes_out": 8250000,
+          "user_agent": "Mozilla/5.0 background-sync"
+        },
+        {
+          "timestamp": "2026-06-08T08:30:40+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "203.0.113.77",
+          "destination_port": 443,
+          "protocol": "tcp",
+          "event_type": "proxy",
+          "action": "allowed",
+          "url": "https://sync.example.invalid/api/4",
+          "bytes_out": 8500000,
+          "user_agent": "Mozilla/5.0 background-sync"
+        },
+        {
+          "timestamp": "2026-06-08T08:30:50+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "203.0.113.77",
+          "destination_port": 443,
+          "protocol": "tcp",
+          "event_type": "proxy",
+          "action": "allowed",
+          "url": "https://sync.example.invalid/api/5",
+          "bytes_out": 8750000,
+          "user_agent": "Mozilla/5.0 background-sync"
+        },
+        {
+          "timestamp": "2026-06-08T08:31:00+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "203.0.113.77",
+          "destination_port": 443,
+          "protocol": "tcp",
+          "event_type": "proxy",
+          "action": "allowed",
+          "url": "https://sync.example.invalid/api/6",
+          "bytes_out": 9000000,
+          "user_agent": "Mozilla/5.0 background-sync"
+        },
+        {
+          "timestamp": "2026-06-08T08:31:10+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "203.0.113.77",
+          "destination_port": 443,
+          "protocol": "tcp",
+          "event_type": "proxy",
+          "action": "allowed",
+          "url": "https://sync.example.invalid/api/7",
+          "bytes_out": 9250000,
+          "user_agent": "Mozilla/5.0 background-sync"
+        },
+        {
+          "timestamp": "2026-06-08T08:29:15+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "10.10.9.20",
+          "destination_port": 22,
+          "protocol": "tcp",
+          "event_type": "flow",
+          "action": "syn",
+          "bytes_out": 80
+        },
+        {
+          "timestamp": "2026-06-08T08:29:16+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "10.10.9.21",
+          "destination_port": 80,
+          "protocol": "tcp",
+          "event_type": "flow",
+          "action": "syn",
+          "bytes_out": 80
+        },
+        {
+          "timestamp": "2026-06-08T08:29:17+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "10.10.9.22",
+          "destination_port": 135,
+          "protocol": "tcp",
+          "event_type": "flow",
+          "action": "syn",
+          "bytes_out": 80
+        },
+        {
+          "timestamp": "2026-06-08T08:29:18+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "10.10.9.23",
+          "destination_port": 139,
+          "protocol": "tcp",
+          "event_type": "flow",
+          "action": "syn",
+          "bytes_out": 80
+        },
+        {
+          "timestamp": "2026-06-08T08:29:19+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "10.10.9.24",
+          "destination_port": 445,
+          "protocol": "tcp",
+          "event_type": "flow",
+          "action": "syn",
+          "bytes_out": 80
+        },
+        {
+          "timestamp": "2026-06-08T08:29:20+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "10.10.9.25",
+          "destination_port": 3389,
+          "protocol": "tcp",
+          "event_type": "flow",
+          "action": "syn",
+          "bytes_out": 80
+        },
+        {
+          "timestamp": "2026-06-08T08:29:21+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "10.10.9.26",
+          "destination_port": 5900,
+          "protocol": "tcp",
+          "event_type": "flow",
+          "action": "syn",
+          "bytes_out": 80
+        },
+        {
+          "timestamp": "2026-06-08T08:29:22+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "10.10.9.27",
+          "destination_port": 6379,
+          "protocol": "tcp",
+          "event_type": "flow",
+          "action": "syn",
+          "bytes_out": 80
+        },
+        {
+          "timestamp": "2026-06-08T08:29:23+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "10.10.9.28",
+          "destination_port": 9200,
+          "protocol": "tcp",
+          "event_type": "flow",
+          "action": "syn",
+          "bytes_out": 80
+        },
+        {
+          "timestamp": "2026-06-08T08:29:24+00:00",
+          "source_ip": "10.10.5.23",
+          "destination_ip": "10.10.9.29",
+          "destination_port": 1433,
+          "protocol": "tcp",
+          "event_type": "flow",
+          "action": "syn",
+          "bytes_out": 80
+        }
+      ],
+      "notable_log_lines": [
+        "Repeated TLS connections to suspicious external host",
+        "High outbound transfer volume from workstation",
+        "Endpoint telemetry observed rclone.exe shortly before alert"
+      ]
+    },
+    "recon": {
+      "source_host": {
+        "ip": "10.10.5.23",
+        "hostname": "ws-finance-023",
+        "owner": "Finance Department",
+        "asset_criticality": "high",
+        "open_ports": [
+          22,
+          443,
+          445,
+          3389
+        ],
+        "last_vulnerability_scan": "2026-06-07",
+        "observed_processes": [
+          "powershell.exe",
+          "rclone.exe",
+          "chrome.exe"
+        ]
+      },
+      "destination": {
+        "ip": "203.0.113.77",
+        "reputation": "suspicious",
+        "asn": "AS64500 Example Transit",
+        "country": "ZZ",
+        "first_seen": "2026-06-08T07:55:00Z"
+      },
+      "network_zone": "corp-user-vlan-10"
+    },
+    "pcap_features": {
+      "flow_count": 8,
+      "unique_external_destinations": 1,
+      "primary_external_destination": "203.0.113.77",
+      "total_bytes_out": 69000000,
+      "total_bytes_in": 850000,
+      "avg_beacon_interval_seconds": 10.0,
+      "jitter_seconds": 1.4,
+      "tls_sni_values": [
+        "sync.example.invalid"
+      ],
+      "protocols": {
+        "tcp": 8,
+        "udp": 0
+      },
+      "pcap_window_seconds": 80
+    }
+  },
+  "stage_2_analysis": {
+    "incident_classification": {
+      "incident_type": "C2 Beaconing with Data Exfiltration",
+      "severity": "critical",
+      "confidence": 0.98,
+      "model": "offline-weighted-feature-classifier-v1",
+      "profile_scores": [
+        {
+          "profile_id": "c2_beaconing",
+          "label": "C2 Beaconing with Data Exfiltration",
+          "score": 0.778,
+          "matched_keywords": [
+            "beacon",
+            "bytes",
+            "external",
+            "rclone",
+            "suspicious",
+            "sync",
+            "tls"
+          ]
+        },
+        {
+          "profile_id": "port_scan",
+          "label": "Port Scanning and Service Discovery",
+          "score": 0.667,
+          "matched_keywords": [
+            "open",
+            "ports",
+            "scan",
+            "syn"
+          ]
+        },
+        {
+          "profile_id": "web_attack",
+          "label": "Web Application Attack",
+          "score": 0.167,
+          "matched_keywords": [
+            "url"
+          ]
+        },
+        {
+          "profile_id": "brute_force",
+          "label": "Credential Brute Force",
+          "score": 0.0,
+          "matched_keywords": []
+        }
+      ],
+      "reasoning_summary": [
+        "Regular outbound beacon interval detected",
+        "Outbound transfer exceeds exfiltration threshold",
+        "Destination reputation is suspicious",
+        "Endpoint process list contains rclone.exe",
+        "Corroborating proxy/firewall/EDR events available"
+      ]
+    },
+    "embedding_profile_score": {
+      "profile_scores": [
+        {
+          "profile_id": "c2_beaconing",
+          "label": "C2 Beaconing with Data Exfiltration",
+          "score": 0.778,
+          "matched_keywords": [
+            "beacon",
+            "bytes",
+            "external",
+            "rclone",
+            "suspicious",
+            "sync",
+            "tls"
+          ]
+        },
+        {
+          "profile_id": "port_scan",
+          "label": "Port Scanning and Service Discovery",
+          "score": 0.667,
+          "matched_keywords": [
+            "open",
+            "ports",
+            "scan",
+            "syn"
+          ]
+        },
+        {
+          "profile_id": "web_attack",
+          "label": "Web Application Attack",
+          "score": 0.167,
+          "matched_keywords": [
+            "url"
+          ]
+        },
+        {
+          "profile_id": "brute_force",
+          "label": "Credential Brute Force",
+          "score": 0.0,
+          "matched_keywords": []
+        }
+      ]
+    }
+  },
+  "mitre_attack": [
+    {
+      "tactic": "Command and Control",
+      "technique": "Application Layer Protocol: Web Protocols",
+      "technique_id": "T1071.001"
+    },
+    {
+      "tactic": "Exfiltration",
+      "technique": "Exfiltration Over C2 Channel",
+      "technique_id": "T1041"
+    },
+    {
+      "tactic": "Command and Control",
+      "technique": "Ingress Tool Transfer",
+      "technique_id": "T1105"
+    }
+  ],
+  "containment_plan": [
+    {
+      "step": 1,
+      "action": "Isolate host 10.10.5.23 from user VLAN",
+      "owner": "SOC L2",
+      "mode": "approval_required",
+      "risk": "medium"
+    },
+    {
+      "step": 2,
+      "action": "Block outbound traffic to 203.0.113.77",
+      "owner": "Network Security",
+      "mode": "simulate_by_default",
+      "risk": "low"
+    },
+    {
+      "step": 3,
+      "action": "Collect volatile endpoint evidence and full packet capture",
+      "owner": "DFIR",
+      "mode": "manual",
+      "risk": "low"
+    },
+    {
+      "step": 4,
+      "action": "Rotate credentials for the affected user and review OAuth tokens",
+      "owner": "IAM",
+      "mode": "approval_required",
+      "risk": "medium"
+    },
+    {
+      "step": 5,
+      "action": "Open IR bridge for critical severity tracking",
+      "owner": "Incident Commander",
+      "mode": "manual",
+      "risk": "low"
+    }
+  ],
+  "ir_report_json": ".pi\\outputs\\demo\\incident_report.json",
+  "ir_report_markdown": ".pi\\outputs\\demo\\incident_report.md"
+}

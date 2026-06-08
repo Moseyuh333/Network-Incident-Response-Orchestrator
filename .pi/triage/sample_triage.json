@@ -1,0 +1,10 @@
+{
+  "alert_id": "ALERT-09-001",
+  "status": "ready",
+  "expected_incident_type": "C2 Beaconing with Data Exfiltration",
+  "parallel_stages": [
+    "recon",
+    "logs",
+    "pcap_features"
+  ]
+}
