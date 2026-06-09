@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     beacon_repeat_count: int = 6
     flood_threshold: int = 100
     flood_window_seconds: int = 60
+    ml_anomaly_enabled: bool = True
+    ml_anomaly_threshold: float = 0.92
+    correlation_window_hours: int = 24
+    correlation_max_evidence_items: int = 100
 
     # Response
     enable_real_response: bool = False

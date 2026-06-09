@@ -21,6 +21,10 @@ htmlcov/
 dist/
 build/
 
+# Frontend dependencies/build outputs
+frontend/node_modules/
+frontend/dist/
+
 # Runtime outputs
 niro.db
 *.db

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from urllib.parse import urlparse
 
 
 def is_valid_ip(value: str) -> bool:

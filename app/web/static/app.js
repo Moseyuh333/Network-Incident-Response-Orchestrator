@@ -107,6 +107,16 @@ function renderRun(payload) {
   $("auditLog").textContent = [payload.audit_log, payload.permission_log].filter(Boolean).join("\n");
 }
 
+function renderAgentPayload(payload) {
+  if (payload.agent_run) {
+    $("llmAvailable").textContent = payload.agent_run.provider ? "Agent" : "Fallback";
+    $("auditLog").textContent = JSON.stringify(payload.agent_run, null, 2);
+  }
+  if (payload.incidents) {
+    $("auditLog").textContent = JSON.stringify({ incidents: payload.incidents }, null, 2);
+  }
+}
+
 async function sendChat() {
   const command = $("chatInput").value.trim();
   if (!command) return;
@@ -119,6 +129,7 @@ async function sendChat() {
     });
     addMessage("assistant", data.assistant || "Command completed.", data.mode || "");
     if (data.triage) renderRun(data);
+    if (data.agent_run || data.incidents) renderAgentPayload(data);
     if (data.resources) renderResources(data.resources);
   } catch (error) {
     addMessage("assistant", error.message, "error");

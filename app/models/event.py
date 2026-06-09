@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import Column, JSON
 from sqlmodel import Field, SQLModel
 
 
@@ -14,7 +15,10 @@ class Event(SQLModel, table=True):
     __tablename__ = "events"
 
     id: int | None = Field(default=None, primary_key=True)
+    external_event_id: str | None = Field(default=None, index=True, unique=True)
     timestamp: datetime = Field(index=True)
+    sensor: str | None = Field(default=None, index=True)
+    source_type: str | None = Field(default=None, index=True)
     source_ip: str = Field(index=True)
     destination_ip: str = Field(index=True)
     source_port: int | None = None
@@ -24,8 +28,12 @@ class Event(SQLModel, table=True):
     action: str | None = None
     username: str | None = None
     url: str | None = None
+    domain: str | None = Field(default=None, index=True)
+    flow_id: str | None = Field(default=None, index=True)
+    severity: str | None = Field(default=None, index=True)
     user_agent: str | None = None
     bytes_in: int = 0
     bytes_out: int = 0
-    raw: dict[str, Any] | None = Field(default=None, sa_column_kwargs={"nullable": True})
+    normalized: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    raw: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)

@@ -11,7 +11,7 @@ import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.agents.incident_response_agent import IncidentResponseAgent
-from app.detection.rule_engine import analyze_events
+from app.agents.incident_response_agent import IncidentResponseAgent  # noqa: E402
+from app.detection.rule_engine import analyze_events  # noqa: E402
 
 PI_DIR = ROOT / ".pi"
 DATA_DIR = PI_DIR / "data"
@@ -96,6 +96,26 @@ def parse_events(raw_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return events
 
 
+def scope_events_to_alert(
+    raw_events: list[dict[str, Any]],
+    alert: dict[str, Any],
+    window_minutes: int = 15,
+) -> list[dict[str, Any]]:
+    """Return events related to the alert by IP and time window."""
+    alert_time = datetime.fromisoformat(alert["timestamp"].replace("Z", "+00:00"))
+    start = alert_time - timedelta(minutes=window_minutes)
+    end = alert_time + timedelta(minutes=window_minutes)
+    alert_ips = {alert.get("source_ip"), alert.get("destination_ip")}
+    scoped: list[dict[str, Any]] = []
+    for event in raw_events:
+        event_time = datetime.fromisoformat(str(event["timestamp"]).replace("Z", "+00:00"))
+        if not (start <= event_time <= end):
+            continue
+        if event.get("source_ip") in alert_ips or event.get("destination_ip") in alert_ips:
+            scoped.append(event)
+    return scoped
+
+
 def collect_recon(alert: dict[str, Any]) -> StageResult:
     assets = read_json(DATA_DIR / "asset_inventory.json")
     target_ip = alert["destination_ip"]
@@ -115,15 +135,17 @@ def collect_recon(alert: dict[str, Any]) -> StageResult:
 
 def collect_logs(alert: dict[str, Any]) -> StageResult:
     raw = read_json(DATA_DIR / "security_events.json")
-    events = parse_events(raw["events"])
+    relevant_raw = scope_events_to_alert(raw["events"], alert)
+    events = parse_events(relevant_raw)
     findings = analyze_events(events)
-    relevant = [
-        event for event in raw["events"]
-        if event.get("source_ip") == alert["source_ip"] or event.get("destination_ip") == alert["destination_ip"]
-    ]
     return StageResult(
         "parallel_log_collection",
-        {"event_count": len(events), "relevant_event_count": len(relevant), "events": raw["events"], "findings": findings},
+        {
+            "event_count": len(raw["events"]),
+            "relevant_event_count": len(relevant_raw),
+            "events": relevant_raw,
+            "findings": findings,
+        },
     )
 
 

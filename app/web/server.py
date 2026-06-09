@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -12,11 +13,17 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from sqlmodel import Session, select
 
 from app.core.config import settings
+from app.api.v1 import router as v1_router
+from app.db.session import create_db_and_tables, engine
+from app.models.incident import Incident
+from app.services.agent_runs import run_agent_for_incident
 from scripts.run_pipeline import DATA_DIR, PI_DIR, run_pipeline
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+FRONTEND_DIST_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 RUNTIME_DIR = PI_DIR / "runtime" / "web"
 RUNS_DIR = RUNTIME_DIR / "runs"
 PLUGIN_DIR = PI_DIR / "plugins"
@@ -47,11 +54,18 @@ class ResourcePayload(BaseModel):
 
 def create_app() -> FastAPI:
     """Create the FastAPI app used by uvicorn and tests."""
+    create_db_and_tables()
     app = FastAPI(title="Network Incident Response Orchestrator")
+    app.include_router(v1_router)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    if FRONTEND_DIST_DIR.exists():
+        app.mount("/assets", StaticFiles(directory=FRONTEND_DIST_DIR / "assets"), name="frontend-assets")
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> HTMLResponse:
+        frontend_index = FRONTEND_DIST_DIR / "index.html"
+        if frontend_index.exists():
+            return HTMLResponse(frontend_index.read_text(encoding="utf-8"))
         return HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
 
     @app.get("/api/status")
@@ -115,6 +129,9 @@ def create_app() -> FastAPI:
 
 def _handle_chat_command(command: str, alert: dict[str, Any] | None) -> dict[str, Any]:
     normalized = command.strip().lower()
+    agent_response = _try_handle_agent_command(command)
+    if agent_response:
+        return agent_response
     if any(token in normalized for token in ("run", "analyze", "triage", "phan tich", "phân tích")):
         alert_path = _materialize_alert(alert, use_sample=alert is None)
         run_dir = _new_run_dir()
@@ -140,6 +157,61 @@ def _handle_chat_command(command: str, alert: dict[str, Any] | None) -> dict[str
         "mode": "chat",
         "assistant": "Tell me to analyze or triage the current alert. You can also add or modify skills/plugins from the workspace panel.",
     }
+
+
+def _try_handle_agent_command(command: str) -> dict[str, Any] | None:
+    normalized = command.lower()
+    if "agent" not in normalized and "incident" not in normalized:
+        return None
+    match = re.search(r"incident\s+#?(\d+)", normalized)
+    with Session(engine) as session:
+        if not match:
+            incidents = session.exec(select(Incident).order_by(Incident.updated_at.desc()).limit(5)).all()
+            return {
+                "mode": "agent",
+                "assistant": "Choose an incident id, for example: agent incident 3 contain source.",
+                "incidents": [
+                    {
+                        "id": incident.id,
+                        "public_id": incident.public_id,
+                        "title": incident.title,
+                        "status": incident.status,
+                        "severity": incident.severity,
+                    }
+                    for incident in incidents
+                ],
+            }
+        incident_id = int(match.group(1))
+        try:
+            agent_run = run_agent_for_incident(session, incident_id, command, PI_DIR)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "mode": "agent",
+            "assistant": _agent_run_reply(agent_run),
+            "agent_run": {
+                "id": agent_run.id,
+                "incident_id": agent_run.incident_id,
+                "status": agent_run.status,
+                "provider": agent_run.provider,
+                "model": agent_run.model,
+                "usage_metadata": agent_run.usage_metadata,
+            },
+        }
+
+
+def _agent_run_reply(agent_run: Any) -> str:
+    metadata = agent_run.usage_metadata or {}
+    selected_skill = metadata.get("selected_skill") or "default"
+    tool_summary = metadata.get("tool_results") or {}
+    proposed = tool_summary.get("propose_response_action")
+    tail = ""
+    if proposed:
+        tail = f" Proposed action {proposed.get('action_id')} is waiting for approval."
+    return (
+        f"Agent run {agent_run.id} completed with skill {selected_skill}. "
+        f"Provider: {agent_run.provider or 'fallback'}, model: {agent_run.model or 'n/a'}.{tail}"
+    )
 
 
 def _analysis_reply(triage: dict[str, Any]) -> str:
