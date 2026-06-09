@@ -38,6 +38,7 @@ ml = [
 [project.scripts]
 niro = "app.main:run"
 niro-pipeline = "scripts.run_pipeline:main"
+niro-web = "app.web.server:run_web"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app", "scripts"]

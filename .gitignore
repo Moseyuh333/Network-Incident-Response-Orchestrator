@@ -27,6 +27,7 @@ niro.db
 .pi/logs/
 .pi/triage/
 .pi/reports/
+.pi/runtime/
 .remember/
 .codegraph/
 

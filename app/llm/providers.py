@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -58,28 +59,43 @@ class GoogleGenAIProvider:
                 fallback_reason=redact_secrets(exc, [self.api_key]),
             )
 
-        try:
-            client = genai.Client(api_key=self.api_key)
-            response = client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config={
-                    "temperature": self.config.llm_temperature,
-                    "max_output_tokens": self.config.llm_max_tokens,
-                    "response_mime_type": "application/json",
-                    "response_json_schema": response_schema,
-                },
-            )
-            return LLMResult(
-                available=True,
-                provider=self.provider_name,
-                model=self.model,
-                text=response.text or "",
-            )
-        except Exception as exc:  # pragma: no cover - provider failures vary by SDK/API
+        client = genai.Client(api_key=self.api_key)
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config={
+                        "temperature": self.config.llm_temperature,
+                        "max_output_tokens": self.config.llm_max_tokens,
+                        "response_mime_type": "application/json",
+                        "response_json_schema": response_schema,
+                    },
+                )
+                return LLMResult(
+                    available=True,
+                    provider=self.provider_name,
+                    model=self.model,
+                    text=response.text or "",
+                )
+            except Exception as exc:  # pragma: no cover - provider failures vary by SDK/API
+                last_error = exc
+                message = str(exc)
+                if attempt < 2 and ("503" in message or "UNAVAILABLE" in message):
+                    time.sleep(4 * (attempt + 1))
+                    continue
+                break
+        if last_error is not None:
             return LLMResult(
                 available=False,
                 provider=self.provider_name,
                 model=self.model,
-                fallback_reason=redact_secrets(exc, [self.api_key]),
+                fallback_reason=redact_secrets(last_error, [self.api_key]),
             )
+        return LLMResult(
+            available=False,
+            provider=self.provider_name,
+            model=self.model,
+            fallback_reason="LLM provider returned no response",
+        )
