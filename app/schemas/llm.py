@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class LLMProviderConfig(BaseModel):
     """Configuration for an LLM provider."""
 
-    provider: str = Field(..., pattern="^(anthropic|openai|ollama|gemini)$")
+    provider: str = Field(..., pattern="^(anthropic|openai|ollama|gemini|google)$")
     api_key: str = ""
     api_base: str = ""
     model: str = ""

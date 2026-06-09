@@ -1,0 +1,7 @@
+{
+  "flows": [
+    {"source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "protocol": "TCP", "destination_port": 80, "packet_count": 44, "bytes_in": 12000, "bytes_out": 180000},
+    {"source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "protocol": "TCP", "destination_port": 443, "packet_count": 61, "bytes_in": 22000, "bytes_out": 260000},
+    {"source_ip": "10.10.20.15", "destination_ip": "198.51.100.44", "protocol": "HTTPS", "destination_port": 443, "packet_count": 305, "bytes_in": 10000, "bytes_out": 82400000}
+  ]
+}
