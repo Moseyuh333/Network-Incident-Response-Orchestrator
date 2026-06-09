@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from app.agents.incident_response_agent import IncidentResponseAgent
 from app.detection.rule_engine import analyze_events
 
 PI_DIR = ROOT / ".pi"
@@ -45,6 +46,21 @@ SEVERITY_WEIGHT = {"low": 1, "medium": 2, "high": 3, "critical": 4}
 class StageResult:
     name: str
     payload: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class OutputPaths:
+    triage_dir: Path
+    log_dir: Path
+    report_dir: Path
+
+    @classmethod
+    def from_base(cls, base_dir: Path) -> "OutputPaths":
+        return cls(
+            triage_dir=base_dir / "triage",
+            log_dir=base_dir / "logs",
+            report_dir=base_dir / "reports",
+        )
 
 
 def now_iso() -> str:
@@ -155,13 +171,14 @@ def score_mitre(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return mapped
 
 
-def permission_gate(actions: list[str]) -> list[dict[str, str]]:
+def permission_gate(actions: list[str], paths: OutputPaths | None = None) -> list[dict[str, str]]:
+    paths = paths or OutputPaths.from_base(PI_DIR)
     allowed_prefixes = ("simulate_",)
     decisions: list[dict[str, str]] = []
     for action in actions:
         decision = "allowed" if action.startswith(allowed_prefixes) else "blocked"
         decisions.append({"action": action, "decision": decision, "reason": "lab-safe simulated action only"})
-        append_log(LOG_DIR / "permission_gate.log", f"{decision.upper()} action={action}")
+        append_log(paths.log_dir / "permission_gate.log", f"{decision.upper()} action={action}")
     return decisions
 
 
@@ -182,7 +199,8 @@ def build_containment(classification: dict[str, Any], findings: list[dict[str, A
     return actions
 
 
-def write_markdown_report(alert: dict[str, Any], triage: dict[str, Any]) -> None:
+def write_markdown_report(alert: dict[str, Any], triage: dict[str, Any], paths: OutputPaths | None = None) -> None:
+    paths = paths or OutputPaths.from_base(PI_DIR)
     lines = [
         "# Ket qua Incident Response",
         "",
@@ -191,6 +209,8 @@ def write_markdown_report(alert: dict[str, Any], triage: dict[str, Any]) -> None
         f"- Phan loai: {triage['classification']['label']}",
         f"- Muc do: {triage['classification']['severity']}",
         f"- Do tin cay: {triage['classification']['confidence']}",
+        f"- LLM provider: {triage['llm_analysis']['provider']} / {triage['llm_analysis']['model']}",
+        f"- LLM available: {triage['llm_analysis']['available']}",
         "",
         "## MITRE ATT&CK Mapping",
     ]
@@ -202,14 +222,23 @@ def write_markdown_report(alert: dict[str, Any], triage: dict[str, Any]) -> None
     lines += ["", "## Evidence"]
     for finding in triage["stage_1"]["logs"]["findings"]:
         lines.append(f"- {finding['incident_type']} / {finding['severity']}: {'; '.join(finding['evidence'])}")
-    (REPORT_DIR / "ket_qua.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    lines += ["", "## LLM Analysis", triage["llm_analysis"]["summary"], ""]
+    if triage["llm_analysis"].get("fallback_reason"):
+        lines.append(f"Fallback reason: {triage['llm_analysis']['fallback_reason']}")
+    paths.report_dir.mkdir(parents=True, exist_ok=True)
+    (paths.report_dir / "ket_qua.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def run_pipeline(alert_path: Path) -> dict[str, Any]:
-    for path in (TRIAGE_DIR, LOG_DIR, REPORT_DIR):
+def run_pipeline(
+    alert_path: Path,
+    output_dir: Path | None = None,
+    agent: IncidentResponseAgent | None = None,
+) -> dict[str, Any]:
+    paths = OutputPaths.from_base(output_dir or PI_DIR)
+    for path in (paths.triage_dir, paths.log_dir, paths.report_dir):
         path.mkdir(parents=True, exist_ok=True)
     alert = read_json(alert_path)
-    append_log(LOG_DIR / "audit.log", f"RUN_START alert_id={alert['alert_id']}")
+    append_log(paths.log_dir / "audit.log", f"RUN_START alert_id={alert['alert_id']}")
 
     with ThreadPoolExecutor(max_workers=3) as executor:
         stage1_futures = [
@@ -217,7 +246,8 @@ def run_pipeline(alert_path: Path) -> dict[str, Any]:
             executor.submit(collect_logs, alert),
             executor.submit(extract_pcap_features, alert),
         ]
-        stage1 = {future.result().name: future.result().payload for future in stage1_futures}
+        stage1_results = [future.result() for future in stage1_futures]
+        stage1 = {result.name: result.payload for result in stage1_results}
 
     logs = stage1["parallel_log_collection"]
     pcap = stage1["parallel_pcap_feature_extraction"]
@@ -228,13 +258,25 @@ def run_pipeline(alert_path: Path) -> dict[str, Any]:
         mitre = mitre_future.result()
 
     actions = build_containment(classification, logs["findings"])
+    agent_context = {
+        "alert": alert,
+        "stage_1": {
+            "recon": stage1["parallel_recon"],
+            "logs": logs,
+            "pcap": pcap,
+        },
+        "classification": classification,
+        "mitre_attack": mitre,
+        "containment_actions": actions,
+    }
+    llm_analysis = (agent or IncidentResponseAgent(PI_DIR)).analyze(agent_context)
     triage = {
         "run_started_at": now_iso(),
         "alert": alert,
         "pipeline": {
             "stage_1": "parallel recon + log collection + pcap feature extraction",
             "stage_2": "parallel incident classification + MITRE scoring",
-            "stage_3": "sequential report and containment plan generation",
+            "stage_3": "LLM agent analysis + permission-gated containment + report generation",
         },
         "stage_1": {
             "recon": stage1["parallel_recon"],
@@ -243,21 +285,24 @@ def run_pipeline(alert_path: Path) -> dict[str, Any]:
         },
         "classification": classification,
         "mitre_attack": mitre,
-        "containment": {"actions": actions, "permission_gate": permission_gate(actions)},
+        "llm_analysis": llm_analysis,
+        "containment": {"actions": actions, "permission_gate": permission_gate(actions, paths)},
     }
 
-    write_json(TRIAGE_DIR / "incident_triage.json", triage)
-    write_markdown_report(alert, triage)
-    append_log(LOG_DIR / "audit.log", f"RUN_END alert_id={alert['alert_id']} classification={classification['label']}")
+    write_json(paths.triage_dir / "incident_triage.json", triage)
+    write_markdown_report(alert, triage, paths)
+    append_log(paths.log_dir / "audit.log", f"RUN_END alert_id={alert['alert_id']} classification={classification['label']}")
     return triage
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Network IR orchestration pipeline.")
     parser.add_argument("--alert", default=str(DATA_DIR / "sample_alert.json"), help="Path to alert JSON")
+    parser.add_argument("--output-dir", default=str(PI_DIR), help="Directory for triage, logs, and reports")
     args = parser.parse_args()
-    triage = run_pipeline(Path(args.alert))
-    print(json.dumps({"classification": triage["classification"], "triage": str(TRIAGE_DIR / "incident_triage.json")}, indent=2))
+    output_dir = Path(args.output_dir)
+    triage = run_pipeline(Path(args.alert), output_dir=output_dir)
+    print(json.dumps({"classification": triage["classification"], "triage": str(output_dir / "triage" / "incident_triage.json")}, indent=2))
 
 
 if __name__ == "__main__":

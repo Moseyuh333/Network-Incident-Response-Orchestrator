@@ -1,6 +1,0 @@
-2026-06-05T16:01:47+00:00 ALLOWED action=simulate_notify_admin
-2026-06-05T16:01:47+00:00 ALLOWED action=simulate_block_ip
-2026-06-05T16:01:47+00:00 ALLOWED action=simulate_quarantine_host
-2026-06-05T16:08:20+00:00 ALLOWED action=simulate_notify_admin
-2026-06-05T16:08:20+00:00 ALLOWED action=simulate_block_ip
-2026-06-05T16:08:20+00:00 ALLOWED action=simulate_quarantine_host
