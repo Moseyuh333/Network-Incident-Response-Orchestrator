@@ -20,7 +20,8 @@ from app.models.event import Event
 from app.models.incident import AgentRun, AuditEntry, Finding, Incident, ResponseAction
 from app.plugins.registry import PluginRegistry
 from app.schemas.event import BulkEventsRequest, EventCreate, EventResponse
-from app.services.actions import approve_action, execute_action, propose_action, rollback_action
+from app.core.config import settings
+from app.services.actions import approve_action, execute_action, propose_action, reject_action, rollback_action
 from app.services.agent_runs import run_agent_for_incident
 from app.core.paths import PI_DIR
 from app.services.ingestion import ingest_event, process_events
@@ -184,6 +185,14 @@ def approve(action_id: int, session: Annotated[Session, Depends(get_session)]) -
     if action is None:
         raise HTTPException(status_code=404, detail="action not found")
     return _action_dict(approve_action(session, action))
+
+
+@router.post("/actions/{action_id}/reject")
+def reject(action_id: int, session: Annotated[Session, Depends(get_session)]) -> dict[str, Any]:
+    action = session.get(ResponseAction, action_id)
+    if action is None:
+        raise HTTPException(status_code=404, detail="action not found")
+    return _action_dict(reject_action(session, action))
 
 
 @router.post("/actions/{action_id}/execute")
@@ -500,19 +509,20 @@ def list_pi_chains() -> list[dict[str, Any]]:
 
 @router.get("/pi/skills/{name}")
 def get_pi_skill(name: str) -> dict[str, Any]:
-    skill_manifest = PI_DIR / "skills" / name / "SKILL.md"
+    safe_name = _safe_resource_name(name)
+    skill_manifest = PI_DIR / "skills" / safe_name / "SKILL.md"
     if not skill_manifest.exists():
         raise HTTPException(status_code=404, detail="Skill not found")
     # Read the python script if any
     script_content = ""
     script_name = ""
-    for child in (PI_DIR / "skills" / name).iterdir():
+    for child in (PI_DIR / "skills" / safe_name).iterdir():
         if child.is_file() and child.suffix == ".py":
             script_name = child.name
             script_content = child.read_text(encoding="utf-8")
             break
     return {
-        "name": name,
+        "name": safe_name,
         "manifest": skill_manifest.read_text(encoding="utf-8"),
         "script_name": script_name,
         "script": script_content
@@ -521,21 +531,23 @@ def get_pi_skill(name: str) -> dict[str, Any]:
 
 @router.put("/pi/skills/{name}")
 def put_pi_skill(name: str, payload: dict[str, str]) -> dict[str, Any]:
-    skill_dir = PI_DIR / "skills" / name
+    safe_name = _safe_resource_name(name)
+    skill_dir = PI_DIR / "skills" / safe_name
     skill_dir.mkdir(parents=True, exist_ok=True)
     if "manifest" in payload:
         (skill_dir / "SKILL.md").write_text(payload["manifest"], encoding="utf-8")
     if "script" in payload and payload.get("script_name"):
         script_path = skill_dir / payload["script_name"]
         script_path.write_text(payload["script"], encoding="utf-8")
-    return {"status": "saved"}
+    return {"status": "saved", "name": safe_name}
 
 
 @router.post("/pi/skills/{name}/validate")
 def validate_pi_skill(name: str) -> dict[str, Any]:
     import re
     import yaml
-    manifest_path = PI_DIR / "skills" / name / "SKILL.md"
+    safe_name = _safe_resource_name(name)
+    manifest_path = PI_DIR / "skills" / safe_name / "SKILL.md"
     if not manifest_path.exists():
         return {"valid": False, "errors": ["Missing SKILL.md manifest"]}
     content = manifest_path.read_text(encoding="utf-8")
@@ -549,7 +561,7 @@ def validate_pi_skill(name: str) -> dict[str, Any]:
     except Exception as e:
         return {"valid": False, "errors": [f"Malformed YAML in frontmatter: {e}"]}
     
-    scripts = [child for child in (PI_DIR / "skills" / name).iterdir() if child.is_file() and child.suffix == ".py"]
+    scripts = [child for child in (PI_DIR / "skills" / safe_name).iterdir() if child.is_file() and child.suffix == ".py"]
     if not scripts:
         return {"valid": False, "errors": ["Missing implementation script (.py file)"]}
     
@@ -558,10 +570,11 @@ def validate_pi_skill(name: str) -> dict[str, Any]:
 
 @router.post("/pi/skills/{name}/test")
 def test_pi_skill(name: str) -> dict[str, Any]:
+    safe_name = _safe_resource_name(name)
     val = validate_pi_skill(name)
     if not val["valid"]:
         return {"success": False, "output": f"Validation failed: {val['errors']}"}
-    return {"success": True, "output": f"Test executed successfully for skill {name}."}
+    return {"success": True, "output": f"Test executed successfully for skill {safe_name}."}
 
 
 @router.post("/pi/reload")
@@ -576,19 +589,21 @@ def reload_pi_resources() -> dict[str, Any]:
 
 @router.get("/pi/extensions/{name}")
 def get_pi_extension(name: str) -> dict[str, Any]:
-    ext_dir = PI_DIR / "extensions" / name
+    safe_name = _safe_resource_name(name)
+    ext_dir = PI_DIR / "extensions" / safe_name
     if not ext_dir.exists():
         raise HTTPException(status_code=404, detail="Extension not found")
     index_ts = ext_dir / "index.ts"
     return {
-        "name": name,
+        "name": safe_name,
         "content": index_ts.read_text(encoding="utf-8") if index_ts.exists() else ""
     }
 
 
 @router.post("/pi/extensions/{name}/validate")
 def validate_pi_extension(name: str) -> dict[str, Any]:
-    ext_dir = PI_DIR / "extensions" / name
+    safe_name = _safe_resource_name(name)
+    ext_dir = PI_DIR / "extensions" / safe_name
     if not ext_dir.exists():
         return {"valid": False, "errors": ["Extension directory does not exist"]}
     index_ts = ext_dir / "index.ts"
@@ -599,7 +614,133 @@ def validate_pi_extension(name: str) -> dict[str, Any]:
 
 @router.post("/pi/extensions/{name}/test")
 def test_pi_extension(name: str) -> dict[str, Any]:
+    safe_name = _safe_resource_name(name)
     val = validate_pi_extension(name)
     if not val["valid"]:
         return {"success": False, "output": f"Validation failed: {val['errors']}"}
-    return {"success": True, "output": f"Test executed successfully for extension {name}."}
+    return {"success": True, "output": f"Test executed successfully for extension {safe_name}."}
+
+
+@router.get("/pi/runtime")
+def pi_runtime() -> dict[str, Any]:
+    pi_cli = Path("node_modules") / ".bin" / "pi.cmd"
+    pi_package = Path("node_modules") / "@earendil-works" / "pi-coding-agent" / "package.json"
+    installed = pi_cli.exists() or pi_package.exists()
+    return {
+        "name": "Pi Coding Agent",
+        "repo": "https://github.com/earendil-works/pi",
+        "mode": "installed-local-cli" if installed else "local-compatible-runtime",
+        "asset_root": str(PI_DIR),
+        "cli": str(pi_cli) if pi_cli.exists() else "npx pi",
+        "installed": installed,
+        "packages": [
+            "@earendil-works/pi-coding-agent",
+            "@earendil-works/pi-agent-core",
+            "@earendil-works/pi-ai",
+            "@earendil-works/pi-tui",
+        ],
+        "note": "The console reads and writes Pi-style local agents, skills, extensions, and chains under .pi, then reloads them for the local incident-response runtime. The official Pi CLI is available through npx pi when installed.",
+    }
+
+
+@router.get("/config/llm")
+def get_llm_config() -> dict[str, Any]:
+    return _llm_config_response()
+
+
+@router.put("/config/llm")
+def put_llm_config(payload: dict[str, str]) -> dict[str, Any]:
+    provider = (payload.get("provider") or settings.llm_provider or "google").strip().lower()
+    model = (payload.get("model") or settings.effective_llm_model).strip()
+    api_key = (payload.get("api_key") or "").strip()
+    updates = {"LLM_PROVIDER": provider, "LLM_MODEL": model}
+    if provider in {"google", "gemini"}:
+        updates["LLM_MODEL_GOOGLE"] = model
+        updates["LLM_MODEL_GEMINI"] = model
+        if api_key:
+            updates["GOOGLE_API_KEY"] = api_key
+    if api_key:
+        updates["LLM_API_KEY"] = api_key
+    _update_env_file(updates)
+    settings.llm_provider = provider
+    settings.llm_model = model
+    if provider in {"google", "gemini"}:
+        settings.llm_model_google = model
+        settings.llm_model_gemini = model
+        if api_key:
+            settings.google_api_key = api_key
+    if api_key:
+        settings.llm_api_key = api_key
+    return _llm_config_response(saved=True)
+
+
+@router.put("/pi/agents/{name}")
+def put_pi_agent(name: str, payload: dict[str, str]) -> dict[str, Any]:
+    safe_name = _safe_resource_name(name)
+    agents_dir = PI_DIR / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    (agents_dir / f"{safe_name}.md").write_text(payload.get("raw", ""), encoding="utf-8")
+    return {"status": "saved", "name": safe_name}
+
+
+@router.put("/pi/extensions/{name}")
+def put_pi_extension(name: str, payload: dict[str, str]) -> dict[str, Any]:
+    safe_name = _safe_resource_name(name)
+    ext_dir = PI_DIR / "extensions" / safe_name
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    (ext_dir / "index.ts").write_text(payload.get("content", ""), encoding="utf-8")
+    return {"status": "saved", "name": safe_name}
+
+
+@router.put("/pi/chains/{name}")
+def put_pi_chain(name: str, payload: dict[str, str]) -> dict[str, Any]:
+    safe_name = _safe_resource_name(name)
+    chains_dir = PI_DIR / "chains"
+    chains_dir.mkdir(parents=True, exist_ok=True)
+    (chains_dir / f"{safe_name}.yaml").write_text(payload.get("raw", ""), encoding="utf-8")
+    return {"status": "saved", "name": safe_name}
+
+
+def _safe_resource_name(name: str) -> str:
+    safe = Path(name).name.strip().replace(" ", "-")
+    if not safe or safe in {".", ".."} or any(part in safe for part in ("/", "\\")):
+        raise HTTPException(status_code=400, detail="invalid resource name")
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+    if any(ch not in allowed for ch in safe):
+        raise HTTPException(status_code=400, detail="resource name may only contain letters, numbers, dot, underscore, and dash")
+    return safe.removesuffix(".md").removesuffix(".yaml").removesuffix(".yml")
+
+
+def _llm_config_response(saved: bool = False) -> dict[str, Any]:
+    configured = bool(settings.llm_api_key or settings.google_api_key)
+    response = {
+        "provider": settings.llm_provider,
+        "model": settings.effective_llm_model,
+        "configured": configured,
+        "key_present": configured,
+        "saved": saved,
+        "pi_repo": "https://github.com/earendil-works/pi",
+    }
+    return response
+
+
+def _update_env_file(updates: dict[str, str]) -> None:
+    env_path = Path(".env")
+    clean_updates = {key: value.replace("\r", "").replace("\n", "") for key, value in updates.items()}
+    lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+    seen: set[str] = set()
+    next_lines: list[str] = []
+    for line in lines:
+        if not line.strip() or line.lstrip().startswith("#") or "=" not in line:
+            next_lines.append(line)
+            continue
+        key = line.split("=", 1)[0].strip()
+        if key in clean_updates:
+            next_lines.append(f"{key}={clean_updates[key]}")
+            seen.add(key)
+        else:
+            next_lines.append(line)
+    for key, value in clean_updates.items():
+        if key not in seen:
+            next_lines.append(f"{key}={value}")
+    env_path.write_text("\n".join(next_lines) + "\n", encoding="utf-8")

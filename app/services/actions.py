@@ -55,6 +55,21 @@ def approve_action(session: Session, action: ResponseAction, actor: str = "opera
     return action
 
 
+def reject_action(session: Session, action: ResponseAction, actor: str = "operator") -> ResponseAction:
+    before = action.model_dump()
+    if action.status != "awaiting_approval":
+        raise ValueError(f"cannot reject action in state {action.status}")
+    action.status = "rejected"
+    action.approved_by = actor
+    action.approval_timestamp = datetime.utcnow()
+    action.updated_at = datetime.utcnow()
+    session.add(action)
+    session.commit()
+    session.refresh(action)
+    audit(session, actor, "action.reject", "action", str(action.id), before, action.model_dump())
+    return action
+
+
 def execute_action(session: Session, action: ResponseAction, actor: str = "operator") -> ResponseAction:
     before = action.model_dump()
     if action.status not in {"approved"}:

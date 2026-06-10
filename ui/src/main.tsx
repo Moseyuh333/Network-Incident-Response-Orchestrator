@@ -79,9 +79,9 @@ type Action = {
   plugin?: string;
   proposed_by?: string;
   arguments?: Record<string, any>;
-  result?: string;
-  verification_result?: string;
-  rollback_data?: string;
+  result?: any;
+  verification_result?: any;
+  rollback_data?: any;
   created_at?: string;
   updated_at?: string;
 };
@@ -151,6 +151,26 @@ type PiChain = {
   raw: string;
 };
 
+type PiRuntime = {
+  name: string;
+  repo: string;
+  mode: string;
+  asset_root: string;
+  cli?: string;
+  installed?: boolean;
+  packages: string[];
+  note: string;
+};
+
+type LlmConfig = {
+  provider: string;
+  model: string;
+  configured: boolean;
+  key_present: boolean;
+  saved?: boolean;
+  pi_repo?: string;
+};
+
 type NetEvent = {
   id: number;
   external_event_id?: string;
@@ -182,6 +202,16 @@ async function apiCall<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(text || response.statusText);
   }
   return response.json() as Promise<T>;
+}
+
+function formatJson(value: any): string {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }
 
 function App() {
@@ -257,26 +287,39 @@ function App() {
   // /pi/agents state
   const [piAgents, setPiAgents] = useState<AgentProfile[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AgentProfile | null>(null);
+  const [agentEditRaw, setAgentEditRaw] = useState<string>("");
+  const [newAgentName, setNewAgentName] = useState<string>("");
 
   // /pi/skills state
   const [piSkills, setPiSkills] = useState<PiSkill[]>([]);
   const [selectedSkillName, setSelectedSkillName] = useState<string>("");
   const [skillEditManifest, setSkillEditManifest] = useState<string>("");
   const [skillEditScript, setSkillEditScript] = useState<string>("");
+  const [newSkillName, setNewSkillName] = useState<string>("");
   const [skillValidation, setSkillValidation] = useState<{ valid: boolean; errors: string[] } | null>(null);
   const [skillTestOutput, setSkillTestOutput] = useState<string>("");
 
   // /pi/extensions state
   const [piExtensions, setPiExtensions] = useState<PiExtension[]>([]);
   const [selectedExtension, setSelectedExtension] = useState<PiExtension | null>(null);
+  const [extensionEditContent, setExtensionEditContent] = useState<string>("");
+  const [newExtensionName, setNewExtensionName] = useState<string>("");
   const [extensionTestOutput, setExtensionTestOutput] = useState<string>("");
 
   // /pi/chains state
   const [piChains, setPiChains] = useState<PiChain[]>([]);
   const [selectedChain, setSelectedChain] = useState<PiChain | null>(null);
+  const [chainEditRaw, setChainEditRaw] = useState<string>("");
+  const [newChainName, setNewChainName] = useState<string>("");
 
   // /pi/prompts state
   const [piPrompts, setPiPrompts] = useState<PiPrompt[]>([]);
+  const [piRuntime, setPiRuntime] = useState<PiRuntime | null>(null);
+  const [llmConfig, setLlmConfig] = useState<LlmConfig | null>(null);
+  const [llmProvider, setLlmProvider] = useState<string>("google");
+  const [llmModel, setLlmModel] = useState<string>("");
+  const [llmApiKey, setLlmApiKey] = useState<string>("");
+  const [llmSaveStatus, setLlmSaveStatus] = useState<string>("");
 
   // Interactive Node Graph States
   const [selectedNodeDetails, setSelectedNodeDetails] = useState<any | null>(null);
@@ -510,7 +553,10 @@ function App() {
     try {
       const res = await apiCall<AgentProfile[]>("/api/v1/pi/agents");
       setPiAgents(res);
-      if (res.length > 0) setSelectedAgent(res[0]);
+      if (res.length > 0) {
+        setSelectedAgent(res[0]);
+        setAgentEditRaw(res[0].raw);
+      }
     } catch (e: any) {
       appendLog(`Failed to load agents: ${e.message}`, "SYSTEM", "critical");
     }
@@ -533,7 +579,10 @@ function App() {
     try {
       const res = await apiCall<PiExtension[]>("/api/v1/pi/extensions");
       setPiExtensions(res);
-      if (res.length > 0) setSelectedExtension(res[0]);
+      if (res.length > 0) {
+        setSelectedExtension(res[0]);
+        setExtensionEditContent(res[0].content);
+      }
     } catch (e: any) {
       appendLog(`Failed to load extensions: ${e.message}`, "SYSTEM", "critical");
     }
@@ -543,7 +592,10 @@ function App() {
     try {
       const res = await apiCall<PiChain[]>("/api/v1/pi/chains");
       setPiChains(res);
-      if (res.length > 0) setSelectedChain(res[0]);
+      if (res.length > 0) {
+        setSelectedChain(res[0]);
+        setChainEditRaw(res[0].raw);
+      }
     } catch (e: any) {
       appendLog(`Failed to load chains: ${e.message}`, "SYSTEM", "critical");
     }
@@ -555,6 +607,21 @@ function App() {
       setPiPrompts(res);
     } catch (e: any) {
       appendLog(`Failed to load prompts: ${e.message}`, "SYSTEM", "critical");
+    }
+  }, [appendLog]);
+
+  const loadLlmRuntime = useCallback(async () => {
+    try {
+      const [runtime, config] = await Promise.all([
+        apiCall<PiRuntime>("/api/v1/pi/runtime"),
+        apiCall<LlmConfig>("/api/v1/config/llm")
+      ]);
+      setPiRuntime(runtime);
+      setLlmConfig(config);
+      setLlmProvider(config.provider || "google");
+      setLlmModel(config.model || "");
+    } catch (e: any) {
+      appendLog(`Failed to load Pi runtime config: ${e.message}`, "SYSTEM", "critical");
     }
   }, [appendLog]);
 
@@ -574,13 +641,64 @@ function App() {
     if (activeTab === "/skills") loadPiSkills();
     if (activeTab === "/extensions") loadPiExtensions();
     if (activeTab === "/chains") loadPiChains();
+    if (activeTab === "/models" || activeTab === "/settings") loadLlmRuntime();
     if (activeTab === "/audit") loadAuditLogs();
     if (activeTab === "/operations") {
       loadPiPrompts();
     }
-  }, [activeTab, loadEvents, loadPiAgents, loadPiSkills, loadPiExtensions, loadPiChains, loadPiPrompts, loadAuditLogs]);
+  }, [activeTab, loadEvents, loadPiAgents, loadPiSkills, loadPiExtensions, loadPiChains, loadPiPrompts, loadLlmRuntime, loadAuditLogs]);
+
+  const reloadPiRuntime = async () => {
+    await apiCall<any>("/api/v1/pi/reload", { method: "POST" });
+    appendLog("Pi runtime resources reloaded from .pi.", "PI", "normal");
+  };
+
+  const createAgent = async () => {
+    const name = newAgentName.trim();
+    if (!name) return;
+    const raw = `---\nrole: Custom incident response agent\ninput_artifact: incident_evidence\noutput_artifact: analyst_guidance\nallowed_skills: []\nallowed_tools: [query_events, propose_action]\nmaximum_iterations: 4\nmaximum_tool_calls: 8\nsafety_profile: read-only\n---\n\n# ${name}\n\nDefine this agent's mission, tool boundaries, and escalation behavior here.\n`;
+    await apiCall<any>(`/api/v1/pi/agents/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      body: JSON.stringify({ raw })
+    });
+    setNewAgentName("");
+    appendLog(`Agent ${name} created.`, "AGENTS", "normal");
+    await reloadPiRuntime();
+    await loadPiAgents();
+  };
+
+  const saveAgent = async () => {
+    if (!selectedAgent) return;
+    await apiCall<any>(`/api/v1/pi/agents/${encodeURIComponent(selectedAgent.name)}`, {
+      method: "PUT",
+      body: JSON.stringify({ raw: agentEditRaw })
+    });
+    appendLog(`Agent ${selectedAgent.name} saved.`, "AGENTS", "normal");
+    await reloadPiRuntime();
+    await loadPiAgents();
+  };
 
   // Skill Editor Operations
+  const createSkill = async () => {
+    const name = newSkillName.trim();
+    if (!name) return;
+    const manifest = `---\nname: ${name}\ndescription: Custom defensive response skill\ntriggers: [manual]\ninputs: [incident]\noutputs: [analysis]\nsafety: read-only\n---\n\n# ${name}\n\nDescribe when the agent should use this skill and what evidence it must inspect.\n`;
+    const script = `def run(context):\n    return {\"status\": \"ok\", \"skill\": \"${name}\"}\n`;
+    await apiCall<any>(`/api/v1/pi/skills/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        manifest,
+        script,
+        script_name: `${name.replace(/-/g, "_")}.py`
+      })
+    });
+    setNewSkillName("");
+    appendLog(`Skill ${name} created.`, "SKILLS", "normal");
+    await reloadPiRuntime();
+    await loadPiSkills();
+    await selectSkill(name);
+  };
+
   const selectSkill = async (name: string) => {
     setSelectedSkillName(name);
     try {
@@ -605,7 +723,8 @@ function App() {
         })
       });
       appendLog(`Skill ${selectedSkillName} saved successfully!`, "SKILLS", "normal");
-      loadPiSkills();
+      await reloadPiRuntime();
+      await loadPiSkills();
     } catch (e: any) {
       appendLog(`Failed to save skill: ${e.message}`, "SKILLS", "critical");
     }
@@ -632,6 +751,31 @@ function App() {
   };
 
   // Extension validation/testing
+  const createExtension = async () => {
+    const name = newExtensionName.trim();
+    if (!name) return;
+    const content = `export const extension = {\n  name: "${name}",\n  description: "Custom Pi extension hook",\n  async beforeToolCall(ctx: unknown) {\n    return { allow: true, ctx };\n  }\n};\n`;
+    await apiCall<any>(`/api/v1/pi/extensions/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      body: JSON.stringify({ content })
+    });
+    setNewExtensionName("");
+    appendLog(`Extension ${name} created.`, "EXTENSIONS", "normal");
+    await reloadPiRuntime();
+    await loadPiExtensions();
+  };
+
+  const saveExtension = async () => {
+    if (!selectedExtension) return;
+    await apiCall<any>(`/api/v1/pi/extensions/${encodeURIComponent(selectedExtension.name)}`, {
+      method: "PUT",
+      body: JSON.stringify({ content: extensionEditContent })
+    });
+    appendLog(`Extension ${selectedExtension.name} saved.`, "EXTENSIONS", "normal");
+    await reloadPiRuntime();
+    await loadPiExtensions();
+  };
+
   const validateExtension = async (name: string) => {
     try {
       const res = await apiCall<any>(`/api/v1/pi/extensions/${name}/validate`, { method: "POST" });
@@ -648,6 +792,52 @@ function App() {
       appendLog(`Extension ${name} test: ${res.success ? "SUCCESS" : "FAILED"}`, "EXTENSIONS", res.success ? "normal" : "warn");
     } catch (e: any) {
       appendLog(`Failed to test extension: ${e.message}`, "EXTENSIONS", "critical");
+    }
+  };
+
+  const createChain = async () => {
+    const name = newChainName.trim();
+    if (!name) return;
+    const raw = `name: ${name}\nentry: intake-agent\nsteps:\n  - id: intake-agent\n    next: evidence-agent\n  - id: evidence-agent\n    next: triage-agent\n  - id: triage-agent\n    next: response-planner-agent\n  - id: response-planner-agent\n`;
+    await apiCall<any>(`/api/v1/pi/chains/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      body: JSON.stringify({ raw })
+    });
+    setNewChainName("");
+    appendLog(`Chain ${name} created.`, "CHAINS", "normal");
+    await reloadPiRuntime();
+    await loadPiChains();
+  };
+
+  const saveChain = async () => {
+    if (!selectedChain) return;
+    await apiCall<any>(`/api/v1/pi/chains/${encodeURIComponent(selectedChain.name)}`, {
+      method: "PUT",
+      body: JSON.stringify({ raw: chainEditRaw })
+    });
+    appendLog(`Chain ${selectedChain.name} saved.`, "CHAINS", "normal");
+    await reloadPiRuntime();
+    await loadPiChains();
+  };
+
+  const saveLlmConfig = async () => {
+    try {
+      const res = await apiCall<LlmConfig>("/api/v1/config/llm", {
+        method: "PUT",
+        body: JSON.stringify({
+          provider: llmProvider,
+          model: llmModel,
+          api_key: llmApiKey
+        })
+      });
+      setLlmConfig(res);
+      setLlmApiKey("");
+      setLlmSaveStatus("Saved to local .env. API key is stored but never returned to the UI.");
+      appendLog(`LLM config saved for provider ${res.provider} with model ${res.model}.`, "CONFIG", "normal");
+      await refreshData();
+    } catch (e: any) {
+      setLlmSaveStatus(`Save failed: ${e.message}`);
+      appendLog(`Failed to save LLM config: ${e.message}`, "CONFIG", "critical");
     }
   };
 
@@ -800,10 +990,11 @@ function App() {
     }
 
     // 4. Telemetry Findings (horizontal list on top)
-    const incFindings = selectedIncident.evidence || [];
+    const rawFindings = selectedIncident.evidence || [];
+    const incFindings = rawFindings.slice(0, 6);
     const N = incFindings.length;
-    const spacingX = 145;
-    const findingsStartY = -140;
+    const spacingX = 190;
+    const findingsStartY = -210;
     const findingsStartX = N > 1 ? -((N - 1) * spacingX) / 2 : 0;
 
     incFindings.forEach((f, idx) => {
@@ -811,7 +1002,7 @@ function App() {
       nodes.push({
         data: {
           id: fId,
-          label: String(f.alert || f.message || "Threat Pattern"),
+          label: String(f.alert || f.message || f.summary || "Threat Pattern").slice(0, 56),
           type: "finding",
           details: f
         },
@@ -825,10 +1016,28 @@ function App() {
       });
     });
 
+    if (rawFindings.length > incFindings.length) {
+      nodes.push({
+        data: {
+          id: "FND-more",
+          label: `+${rawFindings.length - incFindings.length}\nmore signals`,
+          type: "finding",
+          details: { message: `${rawFindings.length - incFindings.length} additional evidence items hidden to keep the graph readable.` }
+        },
+        position: {
+          x: findingsStartX + incFindings.length * spacingX,
+          y: findingsStartY
+        }
+      });
+      edges.push({
+        data: { id: "edge-fnd-more", source: "root", target: "FND-more", label: "more evidence" }
+      });
+    }
+
     // 5. Mitigation Actions (horizontal list on bottom)
     const incActions = actions.filter((act) => act.incident_id === selectedIncident.id);
     const M = incActions.length;
-    const actionsStartY = 140;
+    const actionsStartY = 220;
     const actionsStartX = M > 1 ? -((M - 1) * spacingX) / 2 : 0;
 
     incActions.forEach((act, idx) => {
@@ -862,17 +1071,19 @@ function App() {
         {
           selector: "node",
           style: {
-            "background-color": "#1F2937",
+            "background-color": "#1D2733",
             "label": "data(label)",
             "color": "#E6EDF3",
-            "font-size": "9px",
+            "font-size": "10px",
             "text-wrap": "wrap",
+            "text-max-width": "118px",
             "text-valign": "center",
             "text-halign": "center",
-            "width": "66px",
-            "height": "66px",
+            "width": "96px",
+            "height": "72px",
             "border-width": "2px",
             "border-color": "#30363D",
+            "overlay-opacity": 0,
             "font-family": "JetBrains Mono, Courier New, monospace"
           }
         },
@@ -880,8 +1091,8 @@ function App() {
           selector: "node[type='incident']",
           style: {
             "shape": "hexagon",
-            "width": "85px",
-            "height": "85px",
+            "width": "132px",
+            "height": "112px",
             "border-width": "3px",
             "color": "#FFFFFF",
             "font-weight": "bold"
@@ -919,6 +1130,8 @@ function App() {
           selector: "node[type='ip'][category='source']",
           style: {
             "shape": "ellipse",
+            "width": "120px",
+            "height": "82px",
             "background-color": "#161B22",
             "border-color": "#E53935",
             "border-width": "3px"
@@ -928,6 +1141,8 @@ function App() {
           selector: "node[type='ip'][category='dest']",
           style: {
             "shape": "ellipse",
+            "width": "120px",
+            "height": "82px",
             "background-color": "#161B22",
             "border-color": "#00FF41",
             "border-width": "3px"
@@ -937,6 +1152,8 @@ function App() {
           selector: "node[type='finding']",
           style: {
             "shape": "round-rectangle",
+            "width": "150px",
+            "height": "74px",
             "background-color": "#161B22",
             "border-color": "#FFB300",
             "border-width": "2px"
@@ -946,6 +1163,8 @@ function App() {
           selector: "node[type='action']",
           style: {
             "shape": "diamond",
+            "width": "132px",
+            "height": "96px",
             "background-color": "#161B22",
             "border-width": "2px"
           }
@@ -983,17 +1202,20 @@ function App() {
         {
           selector: "edge",
           style: {
-            "width": 1.5,
-            "line-color": "#444C56",
-            "target-arrow-color": "#444C56",
+            "width": 2.5,
+            "line-color": "#6B7280",
+            "target-arrow-color": "#9CA3AF",
             "target-arrow-shape": "triangle",
-            "curve-style": "bezier",
+            "arrow-scale": 1.45,
+            "curve-style": "unbundled-bezier",
+            "control-point-distance": 34,
+            "control-point-weight": 0.5,
             "label": "data(label)",
-            "font-size": "8px",
-            "color": "#8B949E",
-            "text-background-opacity": 0.9,
+            "font-size": "9px",
+            "color": "#B2CCD6",
+            "text-background-opacity": 1,
             "text-background-color": "#0A0B0E",
-            "text-background-padding": "2px",
+            "text-background-padding": "4px",
             "font-family": "sans-serif"
           }
         }
@@ -1001,7 +1223,7 @@ function App() {
       layout: {
         name: "preset",
         fit: true,
-        padding: 45
+        padding: 80
       }
     });
 
@@ -1029,8 +1251,9 @@ function App() {
 
   // Terminal scroll helper
   useEffect(() => {
-    if (terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: "smooth" });
+    const node = terminalEndRef.current;
+    if (node?.parentElement) {
+      node.parentElement.scrollTop = node.parentElement.scrollHeight;
     }
   }, [terminalLogs]);
 
@@ -1169,8 +1392,8 @@ function App() {
             DEFENSIVE RESPONSE CONTROL PANEL
           </div>
           <div className="top-header-meta">
-            <div>Open Incidents: {stats?.open_incidents ?? 0}</div>
-            <div>Awaiting Approval: {pendingActions.length}</div>
+            <div>Open Incidents: {stats ? stats.open_incidents : "loading"}</div>
+            <div>Awaiting Approval: {stats ? pendingActions.length : "loading"}</div>
             <button className="btn" onClick={() => void refreshData()} style={{ height: "28px" }}>
               <RefreshCw size={12} /> Sync
             </button>
@@ -1181,12 +1404,12 @@ function App() {
         {activeTab === "/operations" && (
           <div className="ops-grid">
             {/* Left column (25%): Incident Command & Rules of Engagement */}
-            <div className="ops-column">
+            <div className="ops-column ops-setup-column">
               <div className="panel-header">
                 <span>Incident Lock & Setup</span>
               </div>
-              <div className="panel-body">
-                <div className="section-card">
+              <div className="panel-body ops-setup-body">
+                <div className="section-card setup-card target-card">
                   <div className="section-card-header">Target Incident</div>
                   <div className="section-card-body">
                     <div className="incident-lock-row">
@@ -1215,7 +1438,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="section-card">
+                <div className="section-card setup-card agent-card">
                   <div className="section-card-header">Agent Dispatch Matrix</div>
                   <div className="section-card-body">
                     <div className="agent-dispatch-list">
@@ -1231,7 +1454,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="section-card">
+                <div className="section-card setup-card roe-card">
                   <div className="section-card-header">Rules of Engagement</div>
                   <div className="section-card-body">
                     <div className="roe-slider-group">
@@ -1298,7 +1521,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="section-card">
+                <div className="section-card setup-card queue-card">
                   <div className="section-card-header">Pipeline Async Queue</div>
                   <div className="section-card-body">
                     <div style={{ fontSize: "11px", display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1311,7 +1534,7 @@ function App() {
                   </div>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div className="demo-actions">
                   <button className="btn btn-crimson" onClick={() => void runDemoScenario("ssh-bruteforce")}>
                     DEMO: SSH BRUTE FORCE
                   </button>
@@ -1329,10 +1552,10 @@ function App() {
             <div className="ops-column" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
               <div className="panel-header">
                 <span>Tactical Node Graph</span>
-                <span className="mono" style={{ fontSize: "9px" }}>INC-{selectedIncident?.id || "N/A"}</span>
+                <span className="mono" style={{ fontSize: "9px" }}>{selectedIncident ? `INC-${selectedIncident.id}` : "NO CASE"}</span>
               </div>
               
-              <div className="graph-container-wrapper">
+              <div className={`graph-container-wrapper ${selectedNodeDetails ? "has-details" : ""}`}>
                 <div className="matrix-bg">
                   0100 0011 0010 0110 0110 0001 0110 0011 0111 1001 0000 1010
                   1100 1010 0110 0110 1111 0000 1010 1101 0111 0011 0010 1100
@@ -1341,6 +1564,22 @@ function App() {
                 
                 {/* Cytoscape element */}
                 <div id="cy-relationship-graph" className="graph-view" />
+
+                {!selectedIncident && (
+                  <div className="graph-empty-state">
+                    <div className="empty-flow">
+                      <span>Intake</span>
+                      <i />
+                      <span>Evidence</span>
+                      <i />
+                      <span>Detection</span>
+                      <i />
+                      <span>Response</span>
+                    </div>
+                    <strong>No incident locked</strong>
+                    <p>Run a demo scenario or ingest telemetry to populate the tactical graph.</p>
+                  </div>
+                )}
 
                 {/* Interactive Node Details Overlay Card */}
                 {selectedNodeDetails && (
@@ -1620,22 +1859,22 @@ function App() {
                   </span>
                 </div>
                 
-                <div style={{ overflowY: "auto", flexGrow: 1, padding: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div className="approval-queue-list">
                   {pendingActions.map((act) => (
-                    <div key={act.id} className="section-card" style={{ borderLeft: "2px solid var(--alert-warning)" }}>
-                      <div className="section-card-body" style={{ padding: "8px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: "bold" }}>
-                          <span>{act.action_type}</span>
-                          <span style={{ color: "var(--alert-critical)" }}>{act.risk.toUpperCase()} Risk</span>
+                    <div key={act.id} className="approval-action-row">
+                      <div className="approval-action-main">
+                        <div className="approval-action-title">
+                          <span>{act.action_type || "response_action"}</span>
+                          <span>{(act.risk || "medium").toUpperCase()} Risk</span>
                         </div>
-                        <div className="mono" style={{ fontSize: "10px", color: "var(--color-secondary)", marginTop: "4px" }}>
+                        <div className="approval-action-meta mono">
                           Target: {act.arguments?.ip || act.arguments?.username || "Global Host"} · Incident INC-{act.incident_id}
                         </div>
-                        <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
-                          <button className="btn btn-success" style={{ height: "24px", fontSize: "9px" }} onClick={() => void handleAction(act.id, "approve")}>
+                        <div className="approval-action-buttons">
+                          <button className="btn btn-success" onClick={() => void handleAction(act.id, "approve")}>
                             Approve
                           </button>
-                          <button className="btn btn-crimson" style={{ height: "24px", fontSize: "9px" }} onClick={() => void handleAction(act.id, "reject")}>
+                          <button className="btn btn-crimson" onClick={() => void handleAction(act.id, "reject")}>
                             Reject
                           </button>
                         </div>
@@ -1643,8 +1882,9 @@ function App() {
                     </div>
                   ))}
                   {pendingActions.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "20px", color: "var(--color-secondary)", fontSize: "11px" }}>
-                      No actions awaiting approval.
+                    <div className="approval-empty-state">
+                      <CheckCircle2 size={18} />
+                      <div>No actions awaiting approval.</div>
                     </div>
                   )}
                 </div>
@@ -1932,6 +2172,13 @@ function App() {
               <button className="sub-tab-item active">Pending Approvals ({pendingActions.length})</button>
             </div>
 
+            <div className="approval-summary-grid">
+              <div className="metric-card"><span>Waiting</span><strong>{pendingActions.length}</strong></div>
+              <div className="metric-card"><span>Approved</span><strong>{actions.filter((act) => act.status === "approved").length}</strong></div>
+              <div className="metric-card"><span>Completed</span><strong>{actions.filter((act) => act.status === "completed").length}</strong></div>
+              <div className="metric-card"><span>Rejected</span><strong>{actions.filter((act) => act.status === "rejected").length}</strong></div>
+            </div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               {actions.map((act) => (
                 <div key={act.id} className="data-card">
@@ -1951,7 +2198,7 @@ function App() {
                         <dt>Proposed By</dt>
                         <dd>{act.proposed_by}</dd>
                         <dt>Arguments</dt>
-                        <dd>{JSON.stringify(act.arguments)}</dd>
+                        <dd><pre className="inline-json">{formatJson(act.arguments)}</pre></dd>
                       </dl>
                     </div>
 
@@ -1983,6 +2230,10 @@ function App() {
                         <span style={{ fontSize: "11px", color: "var(--color-secondary)" }}>Rolled Back</span>
                       )}
 
+                      {act.status === "rejected" && (
+                        <span style={{ fontSize: "11px", color: "var(--color-secondary)" }}>Rejected by operator</span>
+                      )}
+
                       {act.status === "failed" && (
                         <span style={{ fontSize: "11px", color: "var(--alert-critical)" }}>Execution Failed</span>
                       )}
@@ -1991,10 +2242,10 @@ function App() {
                   {act.result && (
                     <div style={{ marginTop: "10px", padding: "8px", backgroundColor: "#040507", border: "1px solid var(--border-color)" }} className="mono">
                       <div style={{ fontSize: "9px", color: "var(--color-secondary)", marginBottom: "4px" }}>EXECUTION RESULT</div>
-                      <pre style={{ fontSize: "10px", whiteSpace: "pre-wrap" }}>{act.result}</pre>
+                      <pre style={{ fontSize: "10px", whiteSpace: "pre-wrap" }}>{formatJson(act.result)}</pre>
                       {act.verification_result && (
                         <div style={{ marginTop: "6px", color: "var(--alert-success)", fontSize: "10px" }}>
-                          Verification: {act.verification_result}
+                          Verification: <pre className="inline-json">{formatJson(act.verification_result)}</pre>
                         </div>
                       )}
                     </div>
@@ -2015,12 +2266,23 @@ function App() {
             <div className="page-header">
               <div>
                 <h2>Logical Incident Response Agents</h2>
-                <div className="page-title-desc">Logical profiles defining role, allowed skills and security tools for each agent.</div>
+                <div className="page-title-desc">Create and edit Pi-style agent profiles. Saved agents are reloaded immediately for the local incident-response runtime.</div>
               </div>
             </div>
 
             <div className="double-panel">
               <div className="double-panel-left">
+                <div className="resource-create-row">
+                  <input
+                    type="text"
+                    placeholder="new-agent-name"
+                    value={newAgentName}
+                    onChange={(e) => setNewAgentName(e.target.value)}
+                  />
+                  <button className="btn btn-info icon-btn" onClick={() => void createAgent()} title="Create agent">
+                    <Plus size={14} />
+                  </button>
+                </div>
                 {piAgents.map((ag) => (
                   <div
                     key={ag.name}
@@ -2030,7 +2292,10 @@ function App() {
                       borderColor: selectedAgent?.name === ag.name ? "var(--alert-info)" : "",
                       backgroundColor: selectedAgent?.name === ag.name ? "rgba(88, 166, 255, 0.03)" : ""
                     }}
-                    onClick={() => setSelectedAgent(ag)}
+                    onClick={() => {
+                      setSelectedAgent(ag);
+                      setAgentEditRaw(ag.raw);
+                    }}
                   >
                     <div className="data-card-header">
                       <span className="mono" style={{ fontWeight: "bold" }}>{ag.name}</span>
@@ -2048,7 +2313,12 @@ function App() {
               <div className="double-panel-right">
                 {selectedAgent ? (
                   <div className="data-card" style={{ flexGrow: 1 }}>
-                    <h3>{selectedAgent.name.toUpperCase()} Profile</h3>
+                    <div className="resource-editor-header">
+                      <h3>{selectedAgent.name.toUpperCase()} Profile</h3>
+                      <button className="btn btn-info" onClick={() => void saveAgent()}>
+                        Save Agent
+                      </button>
+                    </div>
                     
                     <div style={{ marginTop: "16px" }}>
                       <h4 style={{ fontSize: "12px", marginBottom: "8px" }}>Specification Schema</h4>
@@ -2088,9 +2358,11 @@ function App() {
 
                     <div style={{ marginTop: "16px", borderTop: "1px solid var(--border-color)", paddingTop: "16px" }}>
                       <h4 style={{ fontSize: "12px", marginBottom: "8px" }}>Raw MD Definition</h4>
-                      <div className="editor-textarea" style={{ height: "250px", overflowY: "auto", whiteSpace: "pre-wrap" }}>
-                        {selectedAgent.raw}
-                      </div>
+                      <textarea
+                        className="editor-textarea tall-editor"
+                        value={agentEditRaw}
+                        onChange={(e) => setAgentEditRaw(e.target.value)}
+                      />
                     </div>
                   </div>
                 ) : (
@@ -2114,6 +2386,17 @@ function App() {
 
             <div className="double-panel">
               <div className="double-panel-left">
+                <div className="resource-create-row">
+                  <input
+                    type="text"
+                    placeholder="new-skill-name"
+                    value={newSkillName}
+                    onChange={(e) => setNewSkillName(e.target.value)}
+                  />
+                  <button className="btn btn-info icon-btn" onClick={() => void createSkill()} title="Create skill">
+                    <Plus size={14} />
+                  </button>
+                </div>
                 {piSkills.map((sk) => (
                   <button
                     key={sk.name}
@@ -2202,6 +2485,17 @@ function App() {
 
             <div className="double-panel">
               <div className="double-panel-left">
+                <div className="resource-create-row">
+                  <input
+                    type="text"
+                    placeholder="new-extension-name"
+                    value={newExtensionName}
+                    onChange={(e) => setNewExtensionName(e.target.value)}
+                  />
+                  <button className="btn btn-info icon-btn" onClick={() => void createExtension()} title="Create extension">
+                    <Plus size={14} />
+                  </button>
+                </div>
                 {piExtensions.map((ext) => (
                   <div
                     key={ext.name}
@@ -2213,6 +2507,7 @@ function App() {
                     }}
                     onClick={() => {
                       setSelectedExtension(ext);
+                      setExtensionEditContent(ext.content);
                       setExtensionTestOutput("");
                     }}
                   >
@@ -2229,6 +2524,7 @@ function App() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <h3>Extension: {selectedExtension.name}</h3>
                       <div style={{ display: "flex", gap: "8px" }}>
+                        <button className="btn btn-info" onClick={() => void saveExtension()}>Save</button>
                         <button className="btn" onClick={() => void validateExtension(selectedExtension.name)}>Validate</button>
                         <button className="btn btn-crimson" onClick={() => void testExtension(selectedExtension.name)}>Test extension</button>
                       </div>
@@ -2244,8 +2540,8 @@ function App() {
                       <h4 style={{ fontSize: "11px", marginBottom: "6px", color: "var(--color-secondary)" }}>TS IMPLEMENTATION (index.ts)</h4>
                       <textarea
                         className="editor-textarea"
-                        readOnly
-                        value={selectedExtension.content}
+                        value={extensionEditContent}
+                        onChange={(e) => setExtensionEditContent(e.target.value)}
                         style={{ height: "400px" }}
                       />
                     </div>
@@ -2271,6 +2567,17 @@ function App() {
 
             <div className="double-panel">
               <div className="double-panel-left">
+                <div className="resource-create-row">
+                  <input
+                    type="text"
+                    placeholder="new-chain-name"
+                    value={newChainName}
+                    onChange={(e) => setNewChainName(e.target.value)}
+                  />
+                  <button className="btn btn-info icon-btn" onClick={() => void createChain()} title="Create chain">
+                    <Plus size={14} />
+                  </button>
+                </div>
                 {piChains.map((ch) => (
                   <div
                     key={ch.name}
@@ -2280,7 +2587,10 @@ function App() {
                       borderColor: selectedChain?.name === ch.name ? "var(--alert-info)" : "",
                       backgroundColor: selectedChain?.name === ch.name ? "rgba(88, 166, 255, 0.03)" : ""
                     }}
-                    onClick={() => setSelectedChain(ch)}
+                    onClick={() => {
+                      setSelectedChain(ch);
+                      setChainEditRaw(ch.raw);
+                    }}
                   >
                     <div style={{ fontWeight: "bold" }}>{ch.filename}</div>
                   </div>
@@ -2290,70 +2600,67 @@ function App() {
               <div className="double-panel-right">
                 {selectedChain ? (
                   <div className="data-card" style={{ flexGrow: 1 }}>
-                    <h3>DAG: {selectedChain.filename}</h3>
+                    <div className="resource-editor-header">
+                      <h3>DAG: {selectedChain.filename}</h3>
+                      <button className="btn btn-info" onClick={() => void saveChain()}>
+                        Save Chain
+                      </button>
+                    </div>
                     
-                    <div className="dag-container" style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "10px", padding: "20px", overflowY: "auto" }}>
-                      <div style={{ textAlign: "center", color: "var(--color-secondary)", fontSize: "11px" }} className="mono">
-                        ZONE SEQUENCE FLOW CHART
-                      </div>
-                      
-                      {/* Intake phase */}
-                      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "10px" }}>
-                        <div style={{ border: "1px solid var(--border-color)", padding: "10px", background: "var(--bg-secondary)", borderRadius: "4px" }} className="mono">
-                          <div>PHASE 0: Intake</div>
-                          <div style={{ fontSize: "10px", color: "var(--alert-info)" }}>intake-agent</div>
+                    <div className="dag-container">
+                      <div className="dag-title mono">ZONE SEQUENCE FLOW</div>
+                      <div className="dag-lane single">
+                        <div className="dag-node intake">
+                          <span>PHASE 0</span>
+                          <strong>Intake</strong>
+                          <em>intake-agent</em>
                         </div>
                       </div>
-
-                      <div style={{ textAlign: "center", color: "var(--border-color)" }}><ChevronRight size={16} style={{ transform: "rotate(90deg)" }} /></div>
-
-                      {/* Parallel zones */}
-                      <div style={{ display: "flex", justifyContent: "center", gap: "20px" }}>
-                        <div style={{ border: "1px solid var(--border-color)", padding: "10px", background: "var(--bg-secondary)", borderRadius: "4px" }} className="mono">
-                          <div>PHASE 1: Evidence (Asset)</div>
-                          <div style={{ fontSize: "10px", color: "var(--alert-info)" }}>asset-context-agent</div>
+                      <div className="dag-connector split" aria-hidden="true" />
+                      <div className="dag-lane">
+                        <div className="dag-node evidence">
+                          <span>PHASE 1</span>
+                          <strong>Asset Evidence</strong>
+                          <em>asset-context-agent</em>
                         </div>
-                        <div style={{ border: "1px solid var(--border-color)", padding: "10px", background: "var(--bg-secondary)", borderRadius: "4px" }} className="mono">
-                          <div>PHASE 1: Evidence (Flow)</div>
-                          <div style={{ fontSize: "10px", color: "var(--alert-info)" }}>flow-analysis-agent</div>
-                        </div>
-                      </div>
-
-                      <div style={{ textAlign: "center", color: "var(--border-color)" }}><ChevronRight size={16} style={{ transform: "rotate(90deg)" }} /></div>
-
-                      {/* Detection phase */}
-                      <div style={{ display: "flex", justifyContent: "center", gap: "20px" }}>
-                        <div style={{ border: "1px solid var(--border-color)", padding: "10px", background: "var(--bg-secondary)", borderRadius: "4px" }} className="mono">
-                          <div>PHASE 2: Rules Detection</div>
-                          <div style={{ fontSize: "10px", color: "var(--alert-info)" }}>detection-agent</div>
-                        </div>
-                        <div style={{ border: "1px solid var(--border-color)", padding: "10px", background: "var(--bg-secondary)", borderRadius: "4px" }} className="mono">
-                          <div>PHASE 2: ML Anomaly</div>
-                          <div style={{ fontSize: "10px", color: "var(--alert-info)" }}>ml-anomaly-agent</div>
+                        <div className="dag-node evidence">
+                          <span>PHASE 1</span>
+                          <strong>Flow Evidence</strong>
+                          <em>flow-analysis-agent</em>
                         </div>
                       </div>
-
-                      <div style={{ textAlign: "center", color: "var(--border-color)" }}><ChevronRight size={16} style={{ transform: "rotate(90deg)" }} /></div>
-
-                      {/* Triage / MITRE */}
-                      <div style={{ display: "flex", justifyContent: "center", gap: "20px" }}>
-                        <div style={{ border: "1px solid var(--border-color)", padding: "10px", background: "var(--bg-secondary)", borderRadius: "4px" }} className="mono">
-                          <div>PHASE 3: Severity Triage</div>
-                          <div style={{ fontSize: "10px", color: "var(--alert-info)" }}>triage-agent</div>
+                      <div className="dag-connector merge" aria-hidden="true" />
+                      <div className="dag-lane">
+                        <div className="dag-node detect">
+                          <span>PHASE 2</span>
+                          <strong>Rules Detection</strong>
+                          <em>detection-agent</em>
                         </div>
-                        <div style={{ border: "1px solid var(--border-color)", padding: "10px", background: "var(--bg-secondary)", borderRadius: "4px" }} className="mono">
-                          <div>PHASE 3: MITRE Mapping</div>
-                          <div style={{ fontSize: "10px", color: "var(--alert-info)" }}>mitre-agent</div>
+                        <div className="dag-node detect">
+                          <span>PHASE 2</span>
+                          <strong>ML Anomaly</strong>
+                          <em>ml-anomaly-agent</em>
                         </div>
                       </div>
-
-                      <div style={{ textAlign: "center", color: "var(--border-color)" }}><ChevronRight size={16} style={{ transform: "rotate(90deg)" }} /></div>
-
-                      {/* Response planning */}
-                      <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
-                        <div style={{ border: "1px solid var(--border-color)", padding: "10px", background: "var(--bg-secondary)", borderRadius: "4px" }} className="mono">
-                          <div>PHASE 4: Containment Planning</div>
-                          <div style={{ fontSize: "10px", color: "var(--alert-info)" }}>response-planner-agent</div>
+                      <div className="dag-connector merge" aria-hidden="true" />
+                      <div className="dag-lane">
+                        <div className="dag-node triage">
+                          <span>PHASE 3</span>
+                          <strong>Severity Triage</strong>
+                          <em>triage-agent</em>
+                        </div>
+                        <div className="dag-node triage">
+                          <span>PHASE 3</span>
+                          <strong>MITRE Mapping</strong>
+                          <em>mitre-agent</em>
+                        </div>
+                      </div>
+                      <div className="dag-connector merge" aria-hidden="true" />
+                      <div className="dag-lane single">
+                        <div className="dag-node response">
+                          <span>PHASE 4</span>
+                          <strong>Containment Planning</strong>
+                          <em>response-planner-agent</em>
                         </div>
                       </div>
                     </div>
@@ -2362,8 +2669,8 @@ function App() {
                       <h4 style={{ fontSize: "11px", marginBottom: "6px", color: "var(--color-secondary)" }}>YAML CONFIGURATION</h4>
                       <textarea
                         className="editor-textarea"
-                        readOnly
-                        value={selectedChain.raw}
+                        value={chainEditRaw}
+                        onChange={(e) => setChainEditRaw(e.target.value)}
                         style={{ height: "200px" }}
                       />
                     </div>
@@ -2382,42 +2689,100 @@ function App() {
           <div className="page-container">
             <div className="page-header">
               <div>
-                <h2>Machine Learning Anomaly Detectors</h2>
-                <div className="page-title-desc">Train models and scaler metrics, and score real-time packet characteristics.</div>
+                <h2>Pi Coding Agent Runtime</h2>
+                <div className="page-title-desc">Configure the LLM provider, model name, and local Pi-style runtime assets used by incident-response agents.</div>
               </div>
-              <button className="btn btn-info" onClick={() => void trainMLModel()}>
-                Train Isolation Forest
+              <button className="btn" onClick={() => void loadLlmRuntime()}>
+                <RefreshCw size={14} /> Refresh Runtime
               </button>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+            <div className="config-grid">
               <div className="data-card">
-                <h3>Model Parameters</h3>
+                <h3>LLM Provider Config</h3>
+                <div className="form-stack">
+                  <label>
+                    <span>Provider</span>
+                    <input
+                      type="text"
+                      value={llmProvider}
+                      onChange={(e) => setLlmProvider(e.target.value)}
+                      placeholder="google"
+                    />
+                  </label>
+                  <label>
+                    <span>Model name</span>
+                    <input
+                      type="text"
+                      value={llmModel}
+                      onChange={(e) => setLlmModel(e.target.value)}
+                      placeholder="gemini-1.5-flash or your Google model id"
+                    />
+                  </label>
+                  <label>
+                    <span>API key</span>
+                    <input
+                      type="password"
+                      value={llmApiKey}
+                      onChange={(e) => setLlmApiKey(e.target.value)}
+                      placeholder={llmConfig?.key_present ? "Configured - leave blank to keep current key" : "Paste key to store in local .env"}
+                    />
+                  </label>
+                  <button className="btn btn-info" onClick={() => void saveLlmConfig()}>
+                    Save LLM Config
+                  </button>
+                  {llmSaveStatus && <div className="status-note">{llmSaveStatus}</div>}
+                </div>
+              </div>
+
+              <div className="data-card">
+                <h3>Runtime Identity</h3>
                 <dl className="details-dl mono" style={{ marginTop: "12px" }}>
-                  <dt>Model Class</dt>
-                  <dd>IsolationForest (scikit-learn)</dd>
-                  <dt>Contamination Factor</dt>
-                  <dd>0.02 (2% anomalies expected)</dd>
-                  <dt>Max Features</dt>
-                  <dd>22 (Flow characteristics)</dd>
-                  <dt>Model Path</dt>
-                  <dd>models/isolation_forest.joblib</dd>
-                  <dt>Scaler Path</dt>
-                  <dd>models/scaler.joblib</dd>
+                  <dt>Pi Repo</dt>
+                  <dd>{piRuntime?.repo || "https://github.com/earendil-works/pi"}</dd>
+                  <dt>Console Mode</dt>
+                  <dd>{piRuntime?.mode || "loading"}</dd>
+                  <dt>Official CLI</dt>
+                  <dd>{piRuntime?.installed ? (piRuntime.cli || "npx pi") : "not installed"}</dd>
+                  <dt>Asset Root</dt>
+                  <dd>{piRuntime?.asset_root || ".pi"}</dd>
+                  <dt>Provider</dt>
+                  <dd>{llmConfig?.provider || "loading"}</dd>
+                  <dt>Model</dt>
+                  <dd>{llmConfig?.model || "loading"}</dd>
+                  <dt>API Key</dt>
+                  <dd>{llmConfig?.key_present ? "configured" : "not configured"}</dd>
                 </dl>
               </div>
 
               <div className="data-card">
-                <h3>Calculated Flow Features</h3>
+                <h3>Pi Packages</h3>
                 <ul style={{ paddingLeft: "20px", fontSize: "12px", lineHeight: "1.6", color: "var(--color-secondary)" }} className="mono">
-                  <li>flow_duration</li>
-                  <li>total_packets (fwd / bwd)</li>
-                  <li>total_bytes (fwd / bwd)</li>
-                  <li>bytes_per_second</li>
-                  <li>packets_per_second</li>
-                  <li>SYN / ACK / FIN / RST counts</li>
-                  <li>active / idle time</li>
+                  {(piRuntime?.packages || [
+                    "@earendil-works/pi-coding-agent",
+                    "@earendil-works/pi-agent-core",
+                    "@earendil-works/pi-ai",
+                    "@earendil-works/pi-tui"
+                  ]).map((pkg) => <li key={pkg}>{pkg}</li>)}
                 </ul>
+                <div className="status-note">{piRuntime?.note || "Loading runtime metadata..."}</div>
+              </div>
+
+              <div className="data-card">
+                <div className="resource-editor-header">
+                  <h3>Network ML Detector</h3>
+                  <button className="btn btn-info" onClick={() => void trainMLModel()}>
+                    Train Isolation Forest
+                  </button>
+                </div>
+                <dl className="details-dl mono" style={{ marginTop: "12px" }}>
+                  <dt>Model Class</dt>
+                  <dd>IsolationForest (scikit-learn)</dd>
+                  <dt>Feature Set</dt>
+                  <dd>flow duration, packets, bytes, rates, TCP flags, active/idle time</dd>
+                  <dt>Runtime Role</dt>
+                  <dd>Detection signal only. Pi agent still performs triage and response planning.</dd>
+                </dl>
               </div>
             </div>
           </div>

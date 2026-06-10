@@ -24,6 +24,9 @@ build/
 # Frontend dependencies/build outputs
 frontend/node_modules/
 frontend/dist/
+ui/node_modules/
+ui/dist/
+node_modules/
 
 # Runtime outputs
 niro.db

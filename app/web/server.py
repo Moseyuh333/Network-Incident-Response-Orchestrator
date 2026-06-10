@@ -59,8 +59,9 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Network Incident Response Orchestrator")
     app.include_router(v1_router)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-    if FRONTEND_DIST_DIR.exists():
-        app.mount("/assets", StaticFiles(directory=FRONTEND_DIST_DIR / "assets"), name="frontend-assets")
+    frontend_assets = FRONTEND_DIST_DIR / "assets"
+    if frontend_assets.exists():
+        app.mount("/assets", StaticFiles(directory=frontend_assets), name="frontend-assets")
 
     from app.orchestration.engine import orchestrator_engine
     from app.collectors.listeners import NetworkListeners
