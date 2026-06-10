@@ -68,7 +68,10 @@ class IncidentResponseAgent:
 
     def _read_asset(self, relative_path: str) -> str:
         path = self.pi_dir / relative_path
+        if not path.exists():
+            return f"(Asset {relative_path} not found)"
         return path.read_text(encoding="utf-8")
+
 
     @staticmethod
     def _fallback_analysis(

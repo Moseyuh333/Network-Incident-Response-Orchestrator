@@ -150,11 +150,19 @@ def create_app() -> FastAPI:
     return app
 
 
+# ---------------------------------------------------------------------------
+# Chat command routing
+# ---------------------------------------------------------------------------
+
 def _handle_chat_command(command: str, alert: dict[str, Any] | None) -> dict[str, Any]:
     normalized = command.strip().lower()
+
+    # 1. Explicit agent / incident commands
     agent_response = _try_handle_agent_command(command)
     if agent_response:
         return agent_response
+
+    # 2. Pipeline analysis keywords
     if any(token in normalized for token in ("run", "analyze", "triage", "phan tich", "phân tích")):
         alert_path = _materialize_alert(alert, use_sample=alert is None)
         run_dir = _new_run_dir()
@@ -165,20 +173,46 @@ def _handle_chat_command(command: str, alert: dict[str, Any] | None) -> dict[str
             "assistant": _analysis_reply(triage),
             **_run_response(run_dir, triage),
         }
+
+    # 3. Skill / plugin browsing
     if any(token in normalized for token in ("skill", "plugin")):
         return {
             "mode": "resources",
             "assistant": "Loaded local Pi skills and plugins. Select one in the workspace editor to view or modify it.",
             "resources": _resource_index(),
         }
-    latest = _latest_run()
-    if latest:
-        latest["mode"] = "read_latest"
-        latest["assistant"] = "I found the latest run. Use the report, evidence, and logs panels for details."
-        return latest
+
+    # 4. Free-form prompt → route through LLM agent on the most recent incident
+    with Session(engine) as session:
+        latest_incident = session.exec(
+            select(Incident).order_by(Incident.updated_at.desc()).limit(1)
+        ).first()
+        if latest_incident:
+            try:
+                agent_run = run_agent_for_incident(
+                    session, latest_incident.id, command, PI_DIR
+                )
+                return {
+                    "mode": "agent",
+                    "assistant": _agent_run_reply(agent_run),
+                    "agent_run": {
+                        "id": agent_run.id,
+                        "incident_id": agent_run.incident_id,
+                        "status": agent_run.status,
+                        "provider": agent_run.provider,
+                        "model": agent_run.model,
+                        "usage_metadata": agent_run.usage_metadata,
+                    },
+                }
+            except Exception as exc:
+                return {
+                    "mode": "chat",
+                    "assistant": f"Agent error: {exc}. Try: agent incident {latest_incident.id} explain details",
+                }
+
     return {
         "mode": "chat",
-        "assistant": "Tell me to analyze or triage the current alert. You can also add or modify skills/plugins from the workspace panel.",
+        "assistant": "No incidents found yet. Ingest events first using the demo scenarios, then try again.",
     }
 
 
@@ -223,6 +257,10 @@ def _try_handle_agent_command(command: str) -> dict[str, Any] | None:
         }
 
 
+# ---------------------------------------------------------------------------
+# Reply formatters
+# ---------------------------------------------------------------------------
+
 def _agent_run_reply(agent_run: Any) -> str:
     metadata = agent_run.usage_metadata or {}
     selected_skill = metadata.get("selected_skill") or "default"
@@ -231,10 +269,35 @@ def _agent_run_reply(agent_run: Any) -> str:
     tail = ""
     if proposed:
         tail = f" Proposed action {proposed.get('action_id')} is waiting for approval."
-    return (
-        f"Agent run {agent_run.id} completed with skill {selected_skill}. "
+
+    summary = ""
+    reasoning = ""
+    report = ""
+    if agent_run.final_response:
+        try:
+            data = json.loads(agent_run.final_response)
+            summary = data.get("summary") or ""
+            reasoning = data.get("reasoning_summary") or ""
+            report = data.get("report") or ""
+        except Exception:
+            pass
+
+    parts = [
+        f"Agent run {agent_run.id} completed with skill {selected_skill}.",
         f"Provider: {agent_run.provider or 'fallback'}, model: {agent_run.model or 'n/a'}.{tail}"
-    )
+    ]
+    if summary:
+        parts.append(f"\n[SUMMARY]\n{summary}")
+    if reasoning:
+        parts.append(f"\n[REASONING SUMMARY]\n{reasoning}")
+    if report:
+        lines = report.strip().split("\n")
+        short_report = "\n".join(lines[:8])
+        if len(lines) > 8:
+            short_report += "\n... (Go to the INCIDENTS tab to read the full executive report)"
+        parts.append(f"\n[EXECUTIVE REPORT]\n{short_report}")
+
+    return "\n".join(parts)
 
 
 def _analysis_reply(triage: dict[str, Any]) -> str:
@@ -247,6 +310,10 @@ def _analysis_reply(triage: dict[str, Any]) -> str:
         f"with confidence {classification['confidence']}."
     )
 
+
+# ---------------------------------------------------------------------------
+# Resource helpers
+# ---------------------------------------------------------------------------
 
 def _resource_index() -> dict[str, list[dict[str, str]]]:
     return {
@@ -280,6 +347,10 @@ def _resource_path(kind: str, name: str) -> Path:
         return PLUGIN_DIR / safe_name
     raise HTTPException(status_code=400, detail="kind must be skills or plugins")
 
+
+# ---------------------------------------------------------------------------
+# Pipeline run helpers
+# ---------------------------------------------------------------------------
 
 def _now_slug() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
