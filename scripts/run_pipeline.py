@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from app.agents.incident_response_agent import IncidentResponseAgent
-from app.core.paths import DATA_DIR, PI_DIR, TRIAGE_DIR, LOG_DIR, REPORT_DIR
+from app.core.paths import DATA_DIR, PI_DIR
 from app.detection.rule_engine import analyze_events
 
 
@@ -152,8 +152,12 @@ def extract_pcap_features(alert: dict[str, Any]) -> StageResult:
     )
 
 
-def classify_incident(log_payload: dict[str, Any], pcap_payload: dict[str, Any]) -> dict[str, Any]:
-    findings = log_payload["findings"]
+def classify_incident(alert: dict[str, Any], log_payload: dict[str, Any], pcap_payload: dict[str, Any]) -> dict[str, Any]:
+    alert_src = alert.get("source_ip")
+    findings = [
+        f for f in log_payload["findings"]
+        if not alert_src or f.get("source_ip") == alert_src
+    ]
     if not findings:
         return {"label": "Benign/Unconfirmed", "severity": "low", "confidence": 0.3, "signals": []}
     top = max(findings, key=lambda item: (SEVERITY_WEIGHT.get(item["severity"], 0), item["confidence"]))
@@ -165,6 +169,7 @@ def classify_incident(log_payload: dict[str, Any], pcap_payload: dict[str, Any])
         "signals": top["evidence"],
         "model": "rule-weighted classifier with optional sklearn anomaly module",
     }
+
 
 
 def score_mitre(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -264,10 +269,11 @@ def run_pipeline(
     logs = stage1["parallel_log_collection"]
     pcap = stage1["parallel_pcap_feature_extraction"]
     with ThreadPoolExecutor(max_workers=2) as executor:
-        classification_future = executor.submit(classify_incident, logs, pcap)
+        classification_future = executor.submit(classify_incident, alert, logs, pcap)
         mitre_future = executor.submit(score_mitre, logs["findings"])
         classification = classification_future.result()
         mitre = mitre_future.result()
+
 
     actions = build_containment(classification, logs["findings"])
     agent_context = {

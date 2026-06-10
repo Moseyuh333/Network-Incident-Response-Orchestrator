@@ -1,0 +1,7 @@
+name: report-chain
+description: Post-incident analysis and reporting workflow.
+phases:
+  - phase: 0
+    name: build_report
+    agent: report-agent
+    skill: report-generation

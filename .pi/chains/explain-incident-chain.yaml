@@ -1,0 +1,15 @@
+name: explain-incident-chain
+description: Chain for generating plain text natural explanations of security events.
+phases:
+  - phase: 0
+    name: gather_context
+    agent: evidence-agent
+    skill: incident-explanation
+    outputs:
+      - evidence_context.json
+  - phase: 1
+    name: generate_explanation
+    agent: triage-agent
+    skill: incident-explanation
+    outputs:
+      - explanation.txt

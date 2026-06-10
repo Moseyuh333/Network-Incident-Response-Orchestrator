@@ -24,7 +24,7 @@ from app.services.agent_runs import run_agent_for_incident
 from scripts.run_pipeline import run_pipeline
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-FRONTEND_DIST_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+FRONTEND_DIST_DIR = Path(__file__).resolve().parents[2] / "ui" / "dist"
 RUNTIME_DIR = PI_DIR / "runtime" / "web"
 RUNS_DIR = RUNTIME_DIR / "runs"
 PLUGIN_DIR = PI_DIR / "plugins"
@@ -61,6 +61,27 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     if FRONTEND_DIST_DIR.exists():
         app.mount("/assets", StaticFiles(directory=FRONTEND_DIST_DIR / "assets"), name="frontend-assets")
+
+    from app.orchestration.engine import orchestrator_engine
+    from app.collectors.listeners import NetworkListeners
+
+    listeners = NetworkListeners(
+        host=settings.listener_host,
+        tcp_port=settings.tcp_listener_port,
+        udp_port=settings.udp_listener_port,
+    )
+
+    @app.on_event("startup")
+    async def startup_event():
+        orchestrator_engine.start()
+        if settings.enable_tcp_listener or settings.enable_udp_listener:
+            await listeners.start()
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        await orchestrator_engine.stop()
+        if settings.enable_tcp_listener or settings.enable_udp_listener:
+            await listeners.stop()
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> HTMLResponse:

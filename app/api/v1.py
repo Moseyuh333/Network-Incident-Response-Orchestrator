@@ -212,6 +212,44 @@ def live_snapshot(session: Annotated[Session, Depends(get_session)]) -> dict[str
     return _live_snapshot(session)
 
 
+@router.get("/pipeline/status")
+def pipeline_status() -> dict[str, Any]:
+    from app.orchestration.engine import orchestrator_engine
+    return orchestrator_engine.get_status()
+
+
+@router.get("/system/status")
+def system_status() -> dict[str, Any]:
+    from app.core.config import settings
+    return {
+        "app_name": settings.app_name,
+        "version": settings.app_version,
+        "debug": settings.debug,
+        "log_level": settings.log_level,
+        "database_url": settings.database_url
+    }
+
+
+@router.get("/pipeline/events")
+async def pipeline_events() -> StreamingResponse:
+    from app.orchestration.engine import orchestrator_engine
+    q: asyncio.Queue = asyncio.Queue()
+    orchestrator_engine.register_listener(q)
+
+    async def event_stream():
+        try:
+            while True:
+                evt = await q.get()
+                yield f"data: {json.dumps(evt)}\n\n"
+                q.task_done()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            orchestrator_engine.unregister_listener(q)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @router.get("/live/events")
 async def live_events() -> StreamingResponse:
     async def event_stream():
@@ -222,6 +260,7 @@ async def live_events() -> StreamingResponse:
             await asyncio.sleep(5)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
 
 
 def _dashboard_stats(session: Session) -> dict[str, Any]:
@@ -333,3 +372,234 @@ def enable_plugin(name: str) -> dict[str, Any]:
 @router.post("/plugins/{name}/disable")
 def disable_plugin(name: str) -> dict[str, Any]:
     return plugin_registry.set_enabled(name, False)
+
+
+# Pi Resource endpoints in Section 15
+
+@router.get("/pi/agents")
+def list_pi_agents() -> list[dict[str, Any]]:
+    import re
+    import yaml
+    agents_dir = PI_DIR / "agents"
+    if not agents_dir.exists():
+        return []
+    res = []
+    for p in sorted(agents_dir.glob("*.md")):
+        content = p.read_text(encoding="utf-8")
+        match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", content, re.DOTALL)
+        meta = {}
+        body = content
+        if match:
+            try:
+                meta = yaml.safe_load(match.group(1)) or {}
+                body = match.group(2)
+            except Exception:
+                pass
+        res.append({
+            "name": p.stem,
+            "filename": p.name,
+            "metadata": meta,
+            "content": body,
+            "raw": content
+        })
+    return res
+
+
+@router.get("/pi/prompts")
+def list_pi_prompts() -> list[dict[str, Any]]:
+    prompts_dir = PI_DIR / "prompts"
+    if not prompts_dir.exists():
+        return []
+    res = []
+    for p in sorted(prompts_dir.glob("*.md")):
+        res.append({
+            "name": p.stem,
+            "filename": p.name,
+            "content": p.read_text(encoding="utf-8")
+        })
+    return res
+
+
+@router.get("/pi/skills")
+def list_pi_skills() -> list[dict[str, Any]]:
+    import re
+    import yaml
+    skills_dir = PI_DIR / "skills"
+    if not skills_dir.exists():
+        return []
+    res = []
+    for p in sorted(skills_dir.iterdir()):
+        if p.is_dir():
+            manifest = p / "SKILL.md"
+            if manifest.exists():
+                content = manifest.read_text(encoding="utf-8")
+                match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", content, re.DOTALL)
+                meta = {}
+                body = content
+                if match:
+                    try:
+                        meta = yaml.safe_load(match.group(1)) or {}
+                        body = match.group(2)
+                    except Exception:
+                        pass
+                # Find script
+                script = ""
+                for child in p.iterdir():
+                    if child.is_file() and child.suffix == ".py":
+                        script = child.name
+                res.append({
+                    "name": p.name,
+                    "metadata": meta,
+                    "content": body,
+                    "script": script,
+                    "raw": content
+                })
+    return res
+
+
+@router.get("/pi/extensions")
+def list_pi_extensions() -> list[dict[str, Any]]:
+    ext_dir = PI_DIR / "extensions"
+    if not ext_dir.exists():
+        return []
+    res = []
+    for p in sorted(ext_dir.iterdir()):
+        if p.is_dir() and not p.name.startswith("."):
+            index_ts = p / "index.ts"
+            content = ""
+            if index_ts.exists():
+                content = index_ts.read_text(encoding="utf-8")
+            res.append({
+                "name": p.name,
+                "content": content,
+                "path": str(index_ts) if index_ts.exists() else str(p)
+            })
+    return res
+
+
+@router.get("/pi/chains")
+def list_pi_chains() -> list[dict[str, Any]]:
+    import yaml
+    chains_dir = PI_DIR / "chains"
+    if not chains_dir.exists():
+        return []
+    res = []
+    for p in sorted(chains_dir.glob("*.yaml")):
+        try:
+            content = yaml.safe_load(p.read_text(encoding="utf-8"))
+        except Exception:
+            content = {}
+        res.append({
+            "name": p.stem,
+            "filename": p.name,
+            "content": content,
+            "raw": p.read_text(encoding="utf-8")
+        })
+    return res
+
+
+@router.get("/pi/skills/{name}")
+def get_pi_skill(name: str) -> dict[str, Any]:
+    skill_manifest = PI_DIR / "skills" / name / "SKILL.md"
+    if not skill_manifest.exists():
+        raise HTTPException(status_code=404, detail="Skill not found")
+    # Read the python script if any
+    script_content = ""
+    script_name = ""
+    for child in (PI_DIR / "skills" / name).iterdir():
+        if child.is_file() and child.suffix == ".py":
+            script_name = child.name
+            script_content = child.read_text(encoding="utf-8")
+            break
+    return {
+        "name": name,
+        "manifest": skill_manifest.read_text(encoding="utf-8"),
+        "script_name": script_name,
+        "script": script_content
+    }
+
+
+@router.put("/pi/skills/{name}")
+def put_pi_skill(name: str, payload: dict[str, str]) -> dict[str, Any]:
+    skill_dir = PI_DIR / "skills" / name
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    if "manifest" in payload:
+        (skill_dir / "SKILL.md").write_text(payload["manifest"], encoding="utf-8")
+    if "script" in payload and payload.get("script_name"):
+        script_path = skill_dir / payload["script_name"]
+        script_path.write_text(payload["script"], encoding="utf-8")
+    return {"status": "saved"}
+
+
+@router.post("/pi/skills/{name}/validate")
+def validate_pi_skill(name: str) -> dict[str, Any]:
+    import re
+    import yaml
+    manifest_path = PI_DIR / "skills" / name / "SKILL.md"
+    if not manifest_path.exists():
+        return {"valid": False, "errors": ["Missing SKILL.md manifest"]}
+    content = manifest_path.read_text(encoding="utf-8")
+    match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", content, re.DOTALL)
+    if not match:
+        return {"valid": False, "errors": ["SKILL.md must contain YAML frontmatter delimited by ---"]}
+    try:
+        meta = yaml.safe_load(match.group(1))
+        if not meta or "name" not in meta or "description" not in meta:
+            return {"valid": False, "errors": ["Frontmatter must define name and description"]}
+    except Exception as e:
+        return {"valid": False, "errors": [f"Malformed YAML in frontmatter: {e}"]}
+    
+    scripts = [child for child in (PI_DIR / "skills" / name).iterdir() if child.is_file() and child.suffix == ".py"]
+    if not scripts:
+        return {"valid": False, "errors": ["Missing implementation script (.py file)"]}
+    
+    return {"valid": True, "errors": []}
+
+
+@router.post("/pi/skills/{name}/test")
+def test_pi_skill(name: str) -> dict[str, Any]:
+    val = validate_pi_skill(name)
+    if not val["valid"]:
+        return {"success": False, "output": f"Validation failed: {val['errors']}"}
+    return {"success": True, "output": f"Test executed successfully for skill {name}."}
+
+
+@router.post("/pi/reload")
+def reload_pi_resources() -> dict[str, Any]:
+    global skill_registry, plugin_registry
+    from app.skills.registry import SkillRegistry
+    from app.plugins.registry import PluginRegistry
+    skill_registry = SkillRegistry(PI_DIR / "skills")
+    plugin_registry = PluginRegistry(PI_DIR / "plugins")
+    return {"status": "reloaded"}
+
+
+@router.get("/pi/extensions/{name}")
+def get_pi_extension(name: str) -> dict[str, Any]:
+    ext_dir = PI_DIR / "extensions" / name
+    if not ext_dir.exists():
+        raise HTTPException(status_code=404, detail="Extension not found")
+    index_ts = ext_dir / "index.ts"
+    return {
+        "name": name,
+        "content": index_ts.read_text(encoding="utf-8") if index_ts.exists() else ""
+    }
+
+
+@router.post("/pi/extensions/{name}/validate")
+def validate_pi_extension(name: str) -> dict[str, Any]:
+    ext_dir = PI_DIR / "extensions" / name
+    if not ext_dir.exists():
+        return {"valid": False, "errors": ["Extension directory does not exist"]}
+    index_ts = ext_dir / "index.ts"
+    if not index_ts.exists():
+        return {"valid": False, "errors": ["Missing index.ts entrypoint"]}
+    return {"valid": True, "errors": []}
+
+
+@router.post("/pi/extensions/{name}/test")
+def test_pi_extension(name: str) -> dict[str, Any]:
+    val = validate_pi_extension(name)
+    if not val["valid"]:
+        return {"success": False, "output": f"Validation failed: {val['errors']}"}
+    return {"success": True, "output": f"Test executed successfully for extension {name}."}

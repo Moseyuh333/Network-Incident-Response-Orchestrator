@@ -10,9 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.event import Event
 from app.schemas.event import EventCreate
 from app.services.ingestion import ingest_event as svc_ingest_event
 

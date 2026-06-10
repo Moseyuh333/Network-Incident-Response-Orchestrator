@@ -12,6 +12,14 @@ connect_args = {"check_same_thread": False} if settings.database_url.startswith(
 engine = create_engine(settings.database_url, connect_args=connect_args)
 
 
+class SessionLocal(Session):
+    """Local session factory wrapper for backward compatibility with scripts."""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(engine, **kwargs)
+
+
+
 def create_db_and_tables() -> None:
     """Create development/demo database tables."""
     from app.models import event as _event  # noqa: F401

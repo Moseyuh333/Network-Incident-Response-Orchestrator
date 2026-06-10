@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     correlation_window_hours: int = 24
     correlation_max_evidence_items: int = 100
 
+    # Listeners (disabled by default)
+    enable_tcp_listener: bool = False
+    enable_udp_listener: bool = False
+    tcp_listener_port: int = 9001
+    udp_listener_port: int = 9002
+    listener_host: str = "127.0.0.1"
+
     # Response
     enable_real_response: bool = False
     allowed_real_actions: str = "simulate_block_ip,simulate_quarantine_host,simulate_disable_user,simulate_notify_admin"

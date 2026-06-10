@@ -1,0 +1,8 @@
+{
+  "name": "network-incident-response-orchestrator",
+  "private": true,
+  "workspaces": [
+    "ui",
+    ".pi/extensions"
+  ]
+}

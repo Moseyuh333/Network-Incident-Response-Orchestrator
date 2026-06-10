@@ -69,7 +69,14 @@ def process_events(session: Session, events: list[Event]) -> list[Incident]:
         finding = _persist_finding(session, finding_data, events)
         incident = correlate_finding(session, finding, finding_data)
         incidents.append(incident)
+        try:
+            from app.orchestration.engine import orchestrator_engine
+            if incident.id is not None:
+                orchestrator_engine.submit_incident(incident.id)
+        except Exception:
+            pass
     return incidents
+
 
 
 def correlate_finding(session: Session, finding: Finding, finding_data: dict[str, Any]) -> Incident:

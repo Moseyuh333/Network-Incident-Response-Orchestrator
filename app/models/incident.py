@@ -135,3 +135,133 @@ class AuditEntry(SQLModel, table=True):
     after_state: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     result: str = "success"
     correlation_id: str | None = Field(default=None, index=True)
+
+
+class Flow(SQLModel, table=True):
+    """Bidirectional conversation flow metrics."""
+
+    __tablename__ = "flows"
+
+    id: int | None = Field(default=None, primary_key=True)
+    flow_id: str = Field(index=True, unique=True)
+    source_ip: str = Field(index=True)
+    destination_ip: str = Field(index=True)
+    source_port: int
+    destination_port: int
+    protocol: str
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    duration: float = 0.0
+    total_packets: int = 0
+    forward_packets: int = 0
+    backward_packets: int = 0
+    total_bytes: int = 0
+    forward_bytes: int = 0
+    backward_bytes: int = 0
+    bytes_per_second: float = 0.0
+    packets_per_second: float = 0.0
+    fwd_pkt_len_mean: float = 0.0
+    bwd_pkt_len_mean: float = 0.0
+    syn_count: int = 0
+    ack_count: int = 0
+    fin_count: int = 0
+    rst_count: int = 0
+    psh_count: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Asset(SQLModel, table=True):
+    """Network asset information."""
+
+    __tablename__ = "assets"
+
+    id: int | None = Field(default=None, primary_key=True)
+    ip: str = Field(index=True, unique=True)
+    name: str = Field(index=True)
+    criticality: str = Field(default="medium")
+    owner: str | None = None
+    network_zone: str | None = None
+    allowed_services: list[str] | None = Field(default=None, sa_column=Column(JSON))
+    internet_facing: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Policy(SQLModel, table=True):
+    """Operational security policy / Rules of Engagement."""
+
+    __tablename__ = "policies"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    lab_safe_mode: bool = True
+    allowed_cidrs: list[str] | None = Field(default=None, sa_column=Column(JSON))
+    protected_ips: list[str] | None = Field(default=None, sa_column=Column(JSON))
+    out_of_scope_ips: list[str] | None = Field(default=None, sa_column=Column(JSON))
+    tool_rate_limit: int = 10
+    max_concurrent_tools: int = 5
+    auto_read_only: bool = True
+    require_approval: bool = True
+    pipeline_timeout: int = 300
+
+
+class SkillIndex(SQLModel, table=True):
+    """Skill registry cache."""
+
+    __tablename__ = "skill_indices"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    description: str = ""
+    triggers: list[str] | None = Field(default=None, sa_column=Column(JSON))
+    allowed_tools: list[str] | None = Field(default=None, sa_column=Column(JSON))
+    enabled: bool = True
+
+
+class ExtensionIndex(SQLModel, table=True):
+    """Extension registry cache."""
+
+    __tablename__ = "extension_indices"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    version: str = "1.0.0"
+    tools: list[dict[str, Any]] | None = Field(default=None, sa_column=Column(JSON))
+    enabled: bool = True
+
+
+class Artifact(SQLModel, table=True):
+    """Persistent run artifact index."""
+
+    __tablename__ = "artifacts"
+
+    id: int | None = Field(default=None, primary_key=True)
+    incident_id: int | None = Field(default=None, index=True)
+    name: str = Field(index=True)
+    path: str
+    content_type: str = "application/json"
+    content: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ApprovalDecision(SQLModel, table=True):
+    """Decisions made on response actions."""
+
+    __tablename__ = "approval_decisions"
+
+    id: int | None = Field(default=None, primary_key=True)
+    action_id: int = Field(index=True)
+    actor: str = Field(default="operator")
+    decision: str = Field(index=True)
+    reason: str = ""
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class IncidentEvent(SQLModel, table=True):
+    """Many-to-many relationship between incidents and events."""
+
+    __tablename__ = "incident_events"
+
+    id: int | None = Field(default=None, primary_key=True)
+    incident_id: int = Field(index=True)
+    event_id: int = Field(index=True)
+

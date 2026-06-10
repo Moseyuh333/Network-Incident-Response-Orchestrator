@@ -1,0 +1,84 @@
+name: incident-response-chain
+description: Defensive multi-phase incident response pipeline.
+phases:
+  - phase: 0
+    name: incident_intake
+    agent: intake-agent
+    timeout: 30
+    retry_policy:
+      max_attempts: 2
+      backoff: exponential
+    outputs:
+      - intake.json
+
+  - phase: 1
+    name: evidence_acquisition
+    concurrency: parallel
+    timeout: 60
+    agents:
+      - name: event-context-agent
+        skill: auth-investigation
+      - name: asset-context-agent
+        skill: dns-investigation
+      - name: flow-analysis-agent
+        skill: pcap-flow-extraction
+    outputs:
+      - evidence.json
+
+  - phase: 2
+    name: detection_correlation
+    concurrency: parallel
+    timeout: 60
+    agents:
+      - name: rule-detection-agent
+        skill: event-ingestion
+      - name: ml-anomaly-agent
+        skill: pcap-flow-extraction
+      - name: correlation-agent
+        skill: event-ingestion
+    outputs:
+      - findings.json
+
+  - phase: 3
+    name: triage
+    concurrency: parallel
+    timeout: 60
+    agents:
+      - name: triage-agent
+        skill: mitre-mapping
+      - name: mitre-agent
+        skill: mitre-mapping
+      - name: threat-context-agent
+        skill: threat-intelligence
+    outputs:
+      - triage.json
+
+  - phase: 4
+    name: response_planning
+    concurrency: parallel
+    timeout: 60
+    agents:
+      - name: response-planner-agent
+        skill: response-planning
+      - name: response-validator-agent
+        skill: response-planning
+      - name: policy-agent
+        skill: response-planning
+    outputs:
+      - response_plan.json
+
+  - phase: 5
+    name: containment_execution
+    timeout: 120
+    requires_approval: true
+    outputs:
+      - response_result.json
+
+  - phase: 6
+    name: reporting
+    agent: report-agent
+    skill: report-generation
+    timeout: 30
+    outputs:
+      - report.md
+      - report.json
