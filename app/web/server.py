@@ -16,11 +16,12 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.core.config import settings
+from app.core.paths import DATA_DIR, PI_DIR
 from app.api.v1 import router as v1_router
 from app.db.session import create_db_and_tables, engine
 from app.models.incident import Incident
 from app.services.agent_runs import run_agent_for_incident
-from scripts.run_pipeline import DATA_DIR, PI_DIR, run_pipeline
+from scripts.run_pipeline import run_pipeline
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 FRONTEND_DIST_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"

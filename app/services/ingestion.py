@@ -9,6 +9,7 @@ from typing import Any
 from sqlmodel import Session, select
 
 from app.core.config import settings
+from app.core.json import jsonable
 from app.detection.anomaly_detector import anomaly_detector
 from app.detection.rule_engine import analyze_events
 from app.models.event import Event
@@ -152,17 +153,14 @@ def audit(
             action=action,
             target_type=target_type,
             target_id=target_id,
-            before_state=_jsonable(before),
-            after_state=_jsonable(after),
+            before_state=jsonable(before),
+            after_state=jsonable(after),
         )
     )
     session.commit()
 
 
-def _jsonable(value: Any) -> Any:
-    if value is None:
-        return None
-    return json.loads(json.dumps(value, default=str))
+
 
 
 def _dedupe_evidence(items: list[dict[str, Any]]) -> list[dict[str, Any]]:

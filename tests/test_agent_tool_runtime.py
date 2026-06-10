@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from app.db.session import create_db_and_tables, engine
 from app.models.incident import Incident, ResponseAction, ToolCall
 from app.services.agent_runs import run_agent_for_incident
-from scripts.run_pipeline import PI_DIR
+from app.core.paths import PI_DIR
 
 
 def test_agent_run_persists_tool_calls_and_only_proposes_response(monkeypatch) -> None:

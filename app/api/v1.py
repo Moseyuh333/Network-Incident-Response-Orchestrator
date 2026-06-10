@@ -22,9 +22,9 @@ from app.plugins.registry import PluginRegistry
 from app.schemas.event import BulkEventsRequest, EventCreate, EventResponse
 from app.services.actions import approve_action, execute_action, propose_action, rollback_action
 from app.services.agent_runs import run_agent_for_incident
+from app.core.paths import PI_DIR
 from app.services.ingestion import ingest_event, process_events
 from app.skills.registry import SkillRegistry
-from scripts.run_pipeline import PI_DIR
 
 router = APIRouter(prefix="/api/v1", tags=["v1"])
 skill_registry = SkillRegistry(PI_DIR / "skills")

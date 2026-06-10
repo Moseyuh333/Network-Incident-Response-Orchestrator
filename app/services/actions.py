@@ -7,9 +7,10 @@ from typing import Any
 
 from sqlmodel import Session
 
+from app.core.json import jsonable
 from app.models.incident import ResponseAction
 from app.response.policy import evaluate_action, execute_simulation, rollback_simulation
-from app.services.ingestion import _jsonable, audit
+from app.services.ingestion import audit
 
 
 def propose_action(
@@ -59,9 +60,9 @@ def execute_action(session: Session, action: ResponseAction, actor: str = "opera
     if action.status not in {"approved"}:
         raise ValueError(f"cannot execute action in state {action.status}")
     action.status = "completed"
-    action.result = _jsonable(execute_simulation(action))
+    action.result = jsonable(execute_simulation(action))
     action.verification_result = {"verified": True, "mode": "simulation"}
-    action.rollback_data = _jsonable({"previous_state": before})
+    action.rollback_data = jsonable({"previous_state": before})
     action.updated_at = datetime.utcnow()
     session.add(action)
     session.commit()
@@ -75,7 +76,7 @@ def rollback_action(session: Session, action: ResponseAction, actor: str = "oper
     if action.status != "completed":
         raise ValueError(f"cannot rollback action in state {action.status}")
     action.status = "rolled_back"
-    action.result = _jsonable(rollback_simulation(action))
+    action.result = jsonable(rollback_simulation(action))
     action.updated_at = datetime.utcnow()
     session.add(action)
     session.commit()

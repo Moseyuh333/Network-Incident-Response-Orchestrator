@@ -8,25 +8,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from app.agents.incident_response_agent import IncidentResponseAgent  # noqa: E402
-from app.detection.rule_engine import analyze_events  # noqa: E402
-
-PI_DIR = ROOT / ".pi"
-DATA_DIR = PI_DIR / "data"
-TRIAGE_DIR = PI_DIR / "triage"
-LOG_DIR = PI_DIR / "logs"
-REPORT_DIR = PI_DIR / "reports"
+from app.agents.incident_response_agent import IncidentResponseAgent
+from app.core.paths import DATA_DIR, PI_DIR, TRIAGE_DIR, LOG_DIR, REPORT_DIR
+from app.detection.rule_engine import analyze_events
 
 
 MITRE_MAP: dict[str, dict[str, str]] = {

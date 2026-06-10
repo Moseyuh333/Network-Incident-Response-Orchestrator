@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 
 from app.agents.incident_response_agent import IncidentResponseAgent
+from app.core.paths import PI_DIR
 from app.llm.providers import LLMResult
-from scripts import run_pipeline as pipeline
+import scripts.run_pipeline as pipeline
 
 
 class OfflineProvider:
@@ -66,12 +67,13 @@ def test_unrelated_critical_event_does_not_change_alert_classification(tmp_path,
         encoding="utf-8",
     )
     (data_dir / "pcap_features.json").write_text(json.dumps({"flows": []}), encoding="utf-8")
-    monkeypatch.setattr(pipeline, "DATA_DIR", data_dir)
+    import app.core.paths as paths
+    monkeypatch.setattr(paths, "DATA_DIR", data_dir)
 
     triage = pipeline.run_pipeline(
         data_dir / "sample_alert.json",
         output_dir=tmp_path / "out",
-        agent=IncidentResponseAgent(pipeline.PI_DIR, provider=OfflineProvider()),
+        agent=IncidentResponseAgent(PI_DIR, provider=OfflineProvider()),
     )
 
     assert triage["classification"]["label"] == "Web Attack"

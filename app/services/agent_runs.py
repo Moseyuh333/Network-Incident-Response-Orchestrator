@@ -11,8 +11,9 @@ from sqlmodel import Session
 
 from app.agents.incident_response_agent import IncidentResponseAgent
 from app.agents.tools import AgentToolRuntime
+from app.core.json import jsonable
 from app.models.incident import AgentRun, Incident
-from app.services.ingestion import _jsonable, audit
+from app.services.ingestion import audit
 from app.skills.registry import SkillRegistry
 
 
@@ -61,7 +62,7 @@ def run_agent_for_incident(
         agent_run.model = str(analysis.get("model") or "")
         agent_run.status = "completed"
         agent_run.ended_at = datetime.utcnow()
-        agent_run.final_response = json.dumps(_jsonable(analysis), ensure_ascii=False)
+        agent_run.final_response = json.dumps(jsonable(analysis), ensure_ascii=False)
         agent_run.usage_metadata = {
             "selected_skill": skill.id if skill else None,
             "tool_calls_planned": len(planned_calls),
@@ -115,13 +116,13 @@ def _agent_context(
         "task": task,
         "selected_skill": skill.model_dump() if skill else None,
         "available_tools": tools,
-        "tool_results": _jsonable(tool_results),
+        "tool_results": jsonable(tool_results),
         "classification": {
             "label": incident.incident_type,
             "severity": incident.severity,
             "confidence": incident.confidence,
         },
-        "incident": _jsonable(incident.model_dump()),
+        "incident": jsonable(incident.model_dump()),
         "mitre_attack": incident.mitre_mapping or [],
         "containment_actions": incident.recommended_actions or [],
     }

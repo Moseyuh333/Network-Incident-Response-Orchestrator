@@ -8,10 +8,10 @@ from typing import Any
 
 from sqlmodel import Session, select
 
+from app.core.json import jsonable
 from app.models.event import Event
 from app.models.incident import AgentRun, Finding, Incident, ResponseAction, ToolCall
 from app.services.actions import propose_action
-from app.services.ingestion import _jsonable
 
 
 class AgentToolRuntime:
@@ -57,7 +57,7 @@ class AgentToolRuntime:
         call = ToolCall(
             agent_run_id=agent_run.id,
             tool_name=tool_name,
-            sanitized_arguments=_jsonable(arguments),
+            sanitized_arguments=jsonable(arguments),
             risk_level=risk,
             approval_required=approval_required,
         )
@@ -87,7 +87,7 @@ class AgentToolRuntime:
 
     def _get_incident(self, arguments: dict[str, Any]) -> dict[str, Any]:
         incident = self._incident(arguments)
-        return _jsonable(incident.model_dump())
+        return jsonable(incident.model_dump())
 
     def _list_related_events(self, arguments: dict[str, Any]) -> dict[str, Any]:
         incident = self._incident(arguments)
@@ -100,14 +100,14 @@ class AgentToolRuntime:
         for item in filters:
             statement = statement.where(item)
         events = self.session.exec(statement).all()
-        return {"events": [_jsonable(event.model_dump()) for event in events]}
+        return {"events": [jsonable(event.model_dump()) for event in events]}
 
     def _list_findings(self, arguments: dict[str, Any]) -> dict[str, Any]:
         incident = self._incident(arguments)
         findings = self.session.exec(
             select(Finding).where(Finding.incident_id == incident.id).order_by(Finding.created_at.desc())
         ).all()
-        return {"findings": [_jsonable(finding.model_dump()) for finding in findings]}
+        return {"findings": [jsonable(finding.model_dump()) for finding in findings]}
 
     def _list_actions(self, arguments: dict[str, Any]) -> dict[str, Any]:
         incident = self._incident(arguments)
@@ -116,7 +116,7 @@ class AgentToolRuntime:
             .where(ResponseAction.incident_id == incident.id)
             .order_by(ResponseAction.created_at.desc())
         ).all()
-        return {"actions": [_jsonable(action.model_dump()) for action in actions]}
+        return {"actions": [jsonable(action.model_dump()) for action in actions]}
 
     def _propose_response_action(self, arguments: dict[str, Any]) -> dict[str, Any]:
         incident = self._incident(arguments)
@@ -127,7 +127,7 @@ class AgentToolRuntime:
             arguments.get("arguments") or {},
             proposed_by="agent",
         )
-        return {"action": _jsonable(action.model_dump())}
+        return {"action": jsonable(action.model_dump())}
 
     def _incident(self, arguments: dict[str, Any]) -> Incident:
         incident_id = arguments.get("incident_id")
