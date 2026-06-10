@@ -278,6 +278,16 @@ function App() {
   // /pi/prompts state
   const [piPrompts, setPiPrompts] = useState<PiPrompt[]>([]);
 
+  // Interactive Node Graph States
+  const [selectedNodeDetails, setSelectedNodeDetails] = useState<any | null>(null);
+  const [isGraphPaused, setIsGraphPaused] = useState<boolean>(false);
+  const cyRef = useRef<cytoscape.Core | null>(null);
+
+  // Clear node details when selected incident changes
+  useEffect(() => {
+    setSelectedNodeDetails(null);
+  }, [selectedIncidentId]);
+
   // /audit state
   const [auditLogs, setAuditLogs] = useState<string>("");
   const [auditSearch, setAuditSearch] = useState<string>("");
@@ -735,51 +745,113 @@ function App() {
   // Cytoscape relationship graph rendering
   useEffect(() => {
     if (activeTab !== "/operations" || !selectedIncident) return;
+    if (isGraphPaused) return;
     const container = document.getElementById("cy-relationship-graph");
     if (!container) return;
 
     const rootId = `INC-${selectedIncident.id}`;
-    const elements: cytoscape.ElementDefinition[] = [
-      {
-        data: {
-          id: "root",
-          label: `${rootId}\n[${selectedIncident.severity.toUpperCase()}]`,
-          type: "incident",
-          severity: selectedIncident.severity
-        }
-      }
-    ];
+    const nodes: any[] = [];
+    const edges: any[] = [];
 
+    // 1. Root Incident node
+    nodes.push({
+      data: {
+        id: "root",
+        label: `${rootId}\n[${selectedIncident.severity.toUpperCase()}]`,
+        type: "incident",
+        severity: selectedIncident.severity,
+        details: selectedIncident
+      },
+      position: { x: 0, y: 0 }
+    });
+
+    // 2. Source IP (Attacker)
     if (selectedIncident.source_ip) {
-      elements.push(
-        { data: { id: "source_ip", label: selectedIncident.source_ip, type: "ip", category: "source" } },
-        { data: { id: "edge-src", source: "source_ip", target: "root", label: "directly targeted" } }
-      );
-    }
-    if (selectedIncident.destination_ip) {
-      elements.push(
-        { data: { id: "dest_ip", label: selectedIncident.destination_ip, type: "ip", category: "dest" } },
-        { data: { id: "edge-dst", source: "root", target: "dest_ip", label: "impacted asset" } }
-      );
+      nodes.push({
+        data: {
+          id: "source_ip",
+          label: `SOURCE IP\n${selectedIncident.source_ip}`,
+          type: "ip",
+          category: "source",
+          details: { ip: selectedIncident.source_ip, classification: "Attacker / Threat Source" }
+        },
+        position: { x: -220, y: 0 }
+      });
+      edges.push({
+        data: { id: "edge-src", source: "source_ip", target: "root", label: "attacks" }
+      });
     }
 
+    // 3. Destination IP (Victim Asset)
+    if (selectedIncident.destination_ip) {
+      nodes.push({
+        data: {
+          id: "dest_ip",
+          label: `TARGET IP\n${selectedIncident.destination_ip}`,
+          type: "ip",
+          category: "dest",
+          details: { ip: selectedIncident.destination_ip, classification: "Victim Asset / Internal Host" }
+        },
+        position: { x: 220, y: 0 }
+      });
+      edges.push({
+        data: { id: "edge-dst", source: "root", target: "dest_ip", label: "targets" }
+      });
+    }
+
+    // 4. Telemetry Findings (horizontal list on top)
     const incFindings = selectedIncident.evidence || [];
+    const N = incFindings.length;
+    const spacingX = 145;
+    const findingsStartY = -140;
+    const findingsStartX = N > 1 ? -((N - 1) * spacingX) / 2 : 0;
+
     incFindings.forEach((f, idx) => {
       const fId = `FND-${idx}`;
-      elements.push(
-        { data: { id: fId, label: String(f.alert || f.message || "Threat Pattern"), type: "finding" } },
-        { data: { id: `edge-fnd-${idx}`, source: "root", target: fId, label: "correlated finding" } }
-      );
+      nodes.push({
+        data: {
+          id: fId,
+          label: String(f.alert || f.message || "Threat Pattern"),
+          type: "finding",
+          details: f
+        },
+        position: {
+          x: findingsStartX + idx * spacingX,
+          y: findingsStartY
+        }
+      });
+      edges.push({
+        data: { id: `edge-fnd-${idx}`, source: "root", target: fId, label: "telemetry" }
+      });
     });
 
+    // 5. Mitigation Actions (horizontal list on bottom)
     const incActions = actions.filter((act) => act.incident_id === selectedIncident.id);
-    incActions.forEach((act) => {
+    const M = incActions.length;
+    const actionsStartY = 140;
+    const actionsStartX = M > 1 ? -((M - 1) * spacingX) / 2 : 0;
+
+    incActions.forEach((act, idx) => {
       const actId = `ACT-${act.id}`;
-      elements.push(
-        { data: { id: actId, label: `${act.action_type}\n[${act.status}]`, type: "action", status: act.status } },
-        { data: { id: `edge-act-${act.id}`, source: "root", target: actId, label: "proposed containment" } }
-      );
+      nodes.push({
+        data: {
+          id: actId,
+          label: `${act.action_type}\n[${act.status.replace(/_/g, ' ').toUpperCase()}]`,
+          type: "action",
+          status: act.status,
+          details: act
+        },
+        position: {
+          x: actionsStartX + idx * spacingX,
+          y: actionsStartY
+        }
+      });
+      edges.push({
+        data: { id: `edge-act-${act.id}`, source: "root", target: actId, label: "containment" }
+      });
     });
+
+    const elements: cytoscape.ElementDefinition[] = [...nodes, ...edges];
 
     const cy = cytoscape({
       container,
@@ -793,12 +865,12 @@ function App() {
             "background-color": "#1F2937",
             "label": "data(label)",
             "color": "#E6EDF3",
-            "font-size": "10px",
+            "font-size": "9px",
             "text-wrap": "wrap",
             "text-valign": "center",
             "text-halign": "center",
-            "width": "60px",
-            "height": "60px",
+            "width": "66px",
+            "height": "66px",
             "border-width": "2px",
             "border-color": "#30363D",
             "font-family": "JetBrains Mono, Courier New, monospace"
@@ -808,28 +880,63 @@ function App() {
           selector: "node[type='incident']",
           style: {
             "shape": "hexagon",
-            "width": "80px",
-            "height": "80px",
-            "background-color": "#E53935",
-            "border-color": "#FF3333",
+            "width": "85px",
+            "height": "85px",
             "border-width": "3px",
             "color": "#FFFFFF",
             "font-weight": "bold"
           }
         },
         {
-          selector: "node[type='ip']",
+          selector: "node[type='incident'][severity='critical']",
+          style: {
+            "background-color": "#E53935",
+            "border-color": "#FF3333"
+          }
+        },
+        {
+          selector: "node[type='incident'][severity='high']",
+          style: {
+            "background-color": "#FF8F00",
+            "border-color": "#FFB300"
+          }
+        },
+        {
+          selector: "node[type='incident'][severity='medium']",
+          style: {
+            "background-color": "#1E88E5",
+            "border-color": "#58A6FF"
+          }
+        },
+        {
+          selector: "node[type='incident'][severity='low']",
+          style: {
+            "background-color": "#757575",
+            "border-color": "#8B949E"
+          }
+        },
+        {
+          selector: "node[type='ip'][category='source']",
           style: {
             "shape": "ellipse",
             "background-color": "#161B22",
-            "border-color": "#58A6FF",
-            "border-width": "2px"
+            "border-color": "#E53935",
+            "border-width": "3px"
+          }
+        },
+        {
+          selector: "node[type='ip'][category='dest']",
+          style: {
+            "shape": "ellipse",
+            "background-color": "#161B22",
+            "border-color": "#00FF41",
+            "border-width": "3px"
           }
         },
         {
           selector: "node[type='finding']",
           style: {
-            "shape": "rectangle",
+            "shape": "round-rectangle",
             "background-color": "#161B22",
             "border-color": "#FFB300",
             "border-width": "2px"
@@ -838,18 +945,47 @@ function App() {
         {
           selector: "node[type='action']",
           style: {
-            "shape": "triangle",
+            "shape": "diamond",
             "background-color": "#161B22",
-            "border-color": "#00FF41",
             "border-width": "2px"
+          }
+        },
+        {
+          selector: "node[type='action'][status='awaiting_approval']",
+          style: {
+            "border-color": "#FFB300"
+          }
+        },
+        {
+          selector: "node[type='action'][status='approved']",
+          style: {
+            "border-color": "#58A6FF"
+          }
+        },
+        {
+          selector: "node[type='action'][status='completed']",
+          style: {
+            "border-color": "#00FF41"
+          }
+        },
+        {
+          selector: "node[type='action'][status='failed']",
+          style: {
+            "border-color": "#FF3333"
+          }
+        },
+        {
+          selector: "node[type='action'][status='rolled_back']",
+          style: {
+            "border-color": "#8B949E"
           }
         },
         {
           selector: "edge",
           style: {
             "width": 1.5,
-            "line-color": "#30363D",
-            "target-arrow-color": "#30363D",
+            "line-color": "#444C56",
+            "target-arrow-color": "#444C56",
             "target-arrow-shape": "triangle",
             "curve-style": "bezier",
             "label": "data(label)",
@@ -863,16 +999,33 @@ function App() {
         }
       ],
       layout: {
-        name: "cose",
-        animate: true,
-        animationDuration: 500,
-        componentSpacing: 60,
-        nodeRepulsion: () => 6000
+        name: "preset",
+        fit: true,
+        padding: 45
       }
     });
 
-    return () => cy.destroy();
-  }, [activeTab, selectedIncident, actions]);
+    // Register node selection details card triggers
+    cy.on("tap", "node", (evt) => {
+      const node = evt.target;
+      const data = node.data();
+      setSelectedNodeDetails({
+        id: data.id,
+        label: data.label,
+        type: data.type,
+        category: data.category,
+        status: data.status,
+        details: data.details
+      });
+    });
+
+    cyRef.current = cy;
+
+    return () => {
+      cyRef.current = null;
+      cy.destroy();
+    };
+  }, [activeTab, selectedIncident, actions, isGraphPaused]);
 
   // Terminal scroll helper
   useEffect(() => {
@@ -1173,7 +1326,7 @@ function App() {
             </div>
 
             {/* Center column (45%): Tactical Relationship Graph & Operator Input */}
-            <div className="ops-column" style={{ display: "flex", flexDirection: "column" }}>
+            <div className="ops-column" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
               <div className="panel-header">
                 <span>Tactical Node Graph</span>
                 <span className="mono" style={{ fontSize: "9px" }}>INC-{selectedIncident?.id || "N/A"}</span>
@@ -1189,6 +1342,156 @@ function App() {
                 {/* Cytoscape element */}
                 <div id="cy-relationship-graph" className="graph-view" />
 
+                {/* Interactive Node Details Overlay Card */}
+                {selectedNodeDetails && (
+                  <div className="graph-node-details-card">
+                    <div className="card-close-btn" onClick={() => setSelectedNodeDetails(null)}>
+                      <X size={14} />
+                    </div>
+                    <div className="card-title">
+                      {selectedNodeDetails.type}: {selectedNodeDetails.id}
+                    </div>
+                    <div className="card-body">
+                      {selectedNodeDetails.type === "incident" && (
+                        <>
+                          <div className="card-label-val">
+                            <span className="card-label">Title</span>
+                            <span className="card-value">{selectedNodeDetails.details?.title}</span>
+                          </div>
+                          <div className="card-label-val">
+                            <span className="card-label">Severity</span>
+                            <span className={`severity-tag severity-${selectedNodeDetails.details?.severity}`} style={{ width: "fit-content", marginTop: "2px" }}>
+                              {selectedNodeDetails.details?.severity}
+                            </span>
+                          </div>
+                          <div className="card-label-val">
+                            <span className="card-label">Status</span>
+                            <span className="card-value">{selectedNodeDetails.details?.status}</span>
+                          </div>
+                          <div className="card-label-val">
+                            <span className="card-label">Summary</span>
+                            <span className="card-value" style={{ fontFamily: "inherit" }}>
+                              {selectedNodeDetails.details?.summary || selectedNodeDetails.details?.llm_summary || "No description."}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      {selectedNodeDetails.type === "ip" && (
+                        <>
+                          <div className="card-label-val">
+                            <span className="card-label">IP Address</span>
+                            <span className="card-value">{selectedNodeDetails.details?.ip}</span>
+                          </div>
+                          <div className="card-label-val">
+                            <span className="card-label">Classification</span>
+                            <span className="card-value">{selectedNodeDetails.details?.classification}</span>
+                          </div>
+                          <button
+                            className="btn btn-info"
+                            style={{ marginTop: "6px", width: "100%" }}
+                            onClick={() => {
+                              setEventFilters((prev) => ({
+                                ...prev,
+                                sourceIp: selectedNodeDetails.category === "source" ? selectedNodeDetails.details?.ip : "",
+                                destIp: selectedNodeDetails.category === "dest" ? selectedNodeDetails.details?.ip : ""
+                              }));
+                              setActiveTab("/events");
+                            }}
+                          >
+                            Filter in Event Logs
+                          </button>
+                        </>
+                      )}
+                      {selectedNodeDetails.type === "finding" && (
+                        <>
+                          <div className="card-label-val">
+                            <span className="card-label">Alert / Message</span>
+                            <span className="card-value">{selectedNodeDetails.details?.alert || selectedNodeDetails.details?.message}</span>
+                          </div>
+                          <div className="card-label-val">
+                            <span className="card-label">Raw Telemetry Data</span>
+                            <div className="card-value-raw">
+                              {JSON.stringify(selectedNodeDetails.details, null, 2)}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      {selectedNodeDetails.type === "action" && (
+                        <>
+                          <div className="card-label-val">
+                            <span className="card-label">Action Type</span>
+                            <span className="card-value">{selectedNodeDetails.details?.action_type}</span>
+                          </div>
+                          <div className="card-label-val">
+                            <span className="card-label">Status</span>
+                            <span className="card-value">{selectedNodeDetails.details?.status}</span>
+                          </div>
+                          <div className="card-label-val">
+                            <span className="card-label">Risk Level</span>
+                            <span className="card-value" style={{ color: selectedNodeDetails.details?.risk === "high" ? "var(--alert-critical)" : "var(--color-primary)" }}>
+                              {selectedNodeDetails.details?.risk?.toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="card-label-val">
+                            <span className="card-label">Arguments</span>
+                            <span className="card-value">{JSON.stringify(selectedNodeDetails.details?.arguments)}</span>
+                          </div>
+                          <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+                            {selectedNodeDetails.details?.status === "awaiting_approval" && (
+                              <>
+                                <button
+                                  className="btn btn-success"
+                                  style={{ flex: 1, padding: "4px 8px", fontSize: "10px" }}
+                                  onClick={async () => {
+                                    await handleAction(selectedNodeDetails.details.id, "approve");
+                                    setSelectedNodeDetails(null);
+                                  }}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  className="btn btn-crimson"
+                                  style={{ flex: 1, padding: "4px 8px", fontSize: "10px" }}
+                                  onClick={async () => {
+                                    await handleAction(selectedNodeDetails.details.id, "reject");
+                                    setSelectedNodeDetails(null);
+                                  }}
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                            {selectedNodeDetails.details?.status === "approved" && (
+                              <button
+                                className="btn btn-info"
+                                style={{ width: "100%", padding: "4px 8px", fontSize: "10px" }}
+                                onClick={async () => {
+                                  await handleAction(selectedNodeDetails.details.id, "execute");
+                                  setSelectedNodeDetails(null);
+                                }}
+                              >
+                                Execute
+                              </button>
+                            )}
+                            {selectedNodeDetails.details?.status === "completed" && (
+                              <button
+                                className="btn btn-crimson"
+                                style={{ width: "100%", padding: "4px 8px", fontSize: "10px" }}
+                                onClick={async () => {
+                                  await handleAction(selectedNodeDetails.details.id, "rollback");
+                                  setSelectedNodeDetails(null);
+                                }}
+                              >
+                                Rollback
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Tactical glowing alert badge */}
                 {selectedIncident && selectedIncident.severity === "critical" && (
                   <div className="tactical-graph-alert">
@@ -1202,8 +1505,17 @@ function App() {
                 )}
 
                 <div className="graph-controls">
-                  <button className="btn" onClick={() => void refreshData()} style={{ height: "26px" }}>Fit</button>
-                  <button className="btn" onClick={() => appendLog("Paused graph live synchronization.", "GRAPH", "warn")} style={{ height: "26px" }}>Pause</button>
+                  <button className="btn" onClick={() => cyRef.current?.fit(undefined, 45)} style={{ height: "26px" }}>Fit</button>
+                  <button
+                    className={`btn ${isGraphPaused ? "btn-info" : ""}`}
+                    onClick={() => {
+                      setIsGraphPaused(!isGraphPaused);
+                      appendLog(isGraphPaused ? "Resumed graph live synchronization." : "Paused graph live synchronization.", "GRAPH", "warn");
+                    }}
+                    style={{ height: "26px" }}
+                  >
+                    {isGraphPaused ? "Resume" : "Pause"}
+                  </button>
                 </div>
               </div>
 
@@ -1355,7 +1667,7 @@ function App() {
         )}
 
         {activeTab === "/incidents" && (
-          <div className="page-container">
+          <div className="page-container fixed-layout">
             <div className="page-header">
               <div>
                 <h2>Incident Response Case Files</h2>
@@ -1699,7 +2011,7 @@ function App() {
         )}
 
         {activeTab === "/agents" && (
-          <div className="page-container">
+          <div className="page-container fixed-layout">
             <div className="page-header">
               <div>
                 <h2>Logical Incident Response Agents</h2>
@@ -1792,7 +2104,7 @@ function App() {
         )}
 
         {activeTab === "/skills" && (
-          <div className="page-container">
+          <div className="page-container fixed-layout">
             <div className="page-header">
               <div>
                 <h2>Pi Skills Manager</h2>
@@ -1880,7 +2192,7 @@ function App() {
         )}
 
         {activeTab === "/extensions" && (
-          <div className="page-container">
+          <div className="page-container fixed-layout">
             <div className="page-header">
               <div>
                 <h2>TypeScript Pi Extensions</h2>
@@ -1949,7 +2261,7 @@ function App() {
         )}
 
         {activeTab === "/chains" && (
-          <div className="page-container">
+          <div className="page-container fixed-layout">
             <div className="page-header">
               <div>
                 <h2>Pi Orchestration Chains DAG</h2>

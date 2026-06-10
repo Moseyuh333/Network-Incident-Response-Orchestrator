@@ -304,16 +304,18 @@ input[type="text"], select, textarea {
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
   color: var(--color-primary);
-  padding: 6px 10px;
+  padding: 8px 12px;
   font-size: 12px;
-  border-radius: 4px;
+  border-radius: 6px;
   width: 100%;
   outline: none;
   font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 input[type="text"]:focus, select:focus, textarea:focus {
   border-color: var(--alert-info);
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
 }
 
 /* Buttons */
@@ -325,9 +327,9 @@ input[type="text"]:focus, select:focus, textarea:focus {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -335,8 +337,13 @@ input[type="text"]:focus, select:focus, textarea:focus {
 }
 
 .btn:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-secondary);
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(1px);
 }
 
 .btn-crimson {
@@ -345,10 +352,10 @@ input[type="text"]:focus, select:focus, textarea:focus {
 }
 
 .btn-crimson:hover {
-  background-color: rgba(229, 57, 53, 0.1);
-  box-shadow: var(--neon-glow);
+  background-color: rgba(229, 57, 53, 0.12);
+  box-shadow: 0 0 15px rgba(229, 57, 53, 0.35);
   text-shadow: 0 0 5px rgba(229, 57, 53, 0.5);
-  animation: glitch-pulse 0.3s infinite;
+  transform: translateY(-1px);
 }
 
 .btn-success {
@@ -371,14 +378,7 @@ input[type="text"]:focus, select:focus, textarea:focus {
   box-shadow: var(--blue-glow);
 }
 
-@keyframes glitch-pulse {
-  0% { transform: translate(0) }
-  20% { transform: translate(-1px, 1px) }
-  40% { transform: translate(-1px, -1px) }
-  60% { transform: translate(1px, 1px) }
-  80% { transform: translate(1px, -1px) }
-  100% { transform: translate(0) }
-}
+/* keyframes removed */
 
 /* Agent Dispatch status list */
 .agent-dispatch-list {
@@ -673,6 +673,20 @@ input[type="range"]::-webkit-slider-thumb {
   overflow-y: auto;
 }
 
+.page-container.fixed-layout {
+  height: calc(100vh - 50px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.page-container.fixed-layout .double-panel {
+  flex-grow: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 .page-header {
   margin-bottom: 20px;
   display: flex;
@@ -849,4 +863,102 @@ input[type="range"]::-webkit-slider-thumb {
 @keyframes typing {
   from { width: 0 }
   to { width: 100% }
+}
+
+/* Floating Card for Cytoscape Node Details */
+.graph-node-details-card {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 30;
+  background: rgba(15, 20, 28, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+  width: 320px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.graph-node-details-card .card-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  cursor: pointer;
+  color: var(--color-secondary);
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.graph-node-details-card .card-close-btn:hover {
+  color: var(--color-primary);
+}
+
+.graph-node-details-card .card-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  padding-right: 20px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  color: var(--alert-info);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.graph-node-details-card .card-body {
+  font-size: 12px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.graph-node-details-card .card-label-val {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.graph-node-details-card .card-label {
+  font-size: 9px;
+  color: var(--color-secondary);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.graph-node-details-card .card-value {
+  font-family: 'JetBrains Mono', monospace;
+  word-break: break-all;
+  color: var(--color-primary);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.graph-node-details-card .card-value-raw {
+  font-family: 'JetBrains Mono', monospace;
+  word-break: break-all;
+  color: var(--color-primary);
+  background: #040507;
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  font-size: 10px;
+  max-height: 150px;
+  overflow-y: auto;
+  white-space: pre-wrap;
 }
