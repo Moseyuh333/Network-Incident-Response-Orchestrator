@@ -701,6 +701,117 @@ def put_pi_chain(name: str, payload: dict[str, str]) -> dict[str, Any]:
     return {"status": "saved", "name": safe_name}
 
 
+@router.post("/pi/generate")
+def generate_pi_resource(payload: dict[str, str]) -> dict[str, Any]:
+    kind = payload.get("kind")
+    name = payload.get("name")
+    prompt_text = payload.get("prompt")
+
+    if not kind or not name or not prompt_text:
+        raise HTTPException(status_code=400, detail="kind, name, and prompt are required")
+
+    safe_name = _safe_resource_name(name)
+
+    from app.llm.providers import GoogleGenAIProvider
+    provider = GoogleGenAIProvider()
+    if not provider.is_configured:
+        raise HTTPException(status_code=400, detail="LLM provider is not configured. Please set the API key in Settings.")
+
+    prompt = f"""You are a senior cybersecurity automation engineer and Pi Coding Agent.
+Generate a local Pi '{kind}' resource named '{safe_name}' for the Network Incident Response Orchestrator.
+Operator Request: {prompt_text}
+
+Instructions:
+1. Generate the requested resource (agent, skill, extension, or chain) following the standard Pi structure.
+2. If creating or modifying a 'skill', provide both a 'manifest' (SKILL.md content starting with '---' frontmatter) and a 'script' (the executable python code containing 'def run(context):').
+3. If creating or modifying an 'agent', provide the full 'manifest' (starting with YAML frontmatter like 'role: ...' and then markdown description).
+4. If creating or modifying an 'extension', provide the TypeScript hook 'content' (e.g. implementing 'beforeToolCall' or similar hooks).
+5. If creating or modifying a 'chain', provide the YAML 'raw' configuration defining the DAG execution steps.
+6. Return a valid JSON response matching the schema.
+"""
+
+    res = provider.generate_json(prompt, {
+        "type": "object",
+        "properties": {
+            "explanation": {"type": "string"},
+            "resource_type": {"type": "string", "enum": ["agent", "skill", "extension", "chain"]},
+            "resource_name": {"type": "string"},
+            "manifest": {"type": "string"},
+            "script": {"type": "string"},
+            "content": {"type": "string"},
+            "raw": {"type": "string"}
+        },
+        "required": ["explanation", "resource_type", "resource_name"]
+    })
+
+    if not res.available or not res.text:
+        raise HTTPException(status_code=500, detail=f"LLM generation failed: {res.fallback_reason or 'empty response'}")
+
+    try:
+        parsed = json.loads(res.text)
+        res_type = parsed.get("resource_type")
+        explanation = parsed.get("explanation", "")
+
+        saved_files = []
+
+        if res_type == "agent":
+            manifest = parsed.get("manifest") or ""
+            target_dir = PI_DIR / "agents"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_file = target_dir / f"{safe_name}.md"
+            target_file.write_text(manifest, encoding="utf-8")
+            saved_files.append(str(target_file))
+
+        elif res_type == "skill":
+            manifest = parsed.get("manifest") or ""
+            script = parsed.get("script") or ""
+            target_dir = PI_DIR / "skills" / safe_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            manifest_file = target_dir / "SKILL.md"
+            manifest_file.write_text(manifest, encoding="utf-8")
+            saved_files.append(str(manifest_file))
+
+            script_name = f"{safe_name.replace('-', '_')}.py"
+            script_file = target_dir / script_name
+            script_file.write_text(script, encoding="utf-8")
+            saved_files.append(str(script_file))
+
+        elif res_type == "extension":
+            content = parsed.get("content") or ""
+            target_dir = PI_DIR / "extensions" / safe_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_file = target_dir / "index.ts"
+            target_file.write_text(content, encoding="utf-8")
+            saved_files.append(str(target_file))
+
+        elif res_type == "chain":
+            raw = parsed.get("raw") or ""
+            target_dir = PI_DIR / "chains"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_file = target_dir / f"{safe_name}.yaml"
+            target_file.write_text(raw, encoding="utf-8")
+            saved_files.append(str(target_file))
+
+        # reload
+        global skill_registry, plugin_registry
+        from app.skills.registry import SkillRegistry
+        from app.plugins.registry import PluginRegistry
+        skill_registry = SkillRegistry(PI_DIR / "skills")
+        plugin_registry = PluginRegistry(PI_DIR / "plugins")
+
+        return {
+            "status": "success",
+            "explanation": explanation,
+            "resource_type": res_type,
+            "resource_name": safe_name,
+            "saved_files": [str(Path(f).relative_to(PI_DIR.parent)) for f in saved_files]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse and save LLM output: {e}. Raw response: {res.text}")
+
+
+
 def _safe_resource_name(name: str) -> str:
     safe = Path(name).name.strip().replace(" ", "-")
     if not safe or safe in {".", ".."} or any(part in safe for part in ("/", "\\")):

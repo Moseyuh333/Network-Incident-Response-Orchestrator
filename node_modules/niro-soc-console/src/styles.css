@@ -1515,3 +1515,196 @@ input[type="range"]::-webkit-slider-thumb {
   overflow-y: auto;
   white-space: pre-wrap;
 }
+
+/* Modal Dialog & Creation UI */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(6, 7, 9, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-container {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), var(--blue-glow);
+  width: 100%;
+  max-width: 500px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(22, 27, 34, 0.7);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: var(--alert-info);
+  text-shadow: 0 0 8px rgba(88, 166, 255, 0.3);
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+  transition: color 0.15s ease;
+}
+
+.modal-close-btn:hover {
+  color: var(--color-primary);
+}
+
+.modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-error-message {
+  background-color: rgba(229, 57, 53, 0.1);
+  border: 1px solid var(--alert-primary);
+  color: var(--color-primary);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  word-break: break-word;
+}
+
+.modal-body .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal-body .form-group label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-secondary);
+}
+
+.modal-body input[type="text"],
+.modal-body textarea {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--color-primary);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.modal-body input[type="text"]:focus,
+.modal-body textarea:focus {
+  outline: none;
+  border-color: var(--alert-info);
+  box-shadow: var(--blue-glow);
+}
+
+.modal-body textarea {
+  resize: vertical;
+}
+
+.mode-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.mode-btn {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--color-secondary);
+  padding: 10px;
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mode-btn.active {
+  border-color: var(--alert-info);
+  color: var(--alert-info);
+  background-color: rgba(88, 166, 255, 0.05);
+  box-shadow: var(--blue-glow);
+}
+
+.mode-btn:hover:not(.active) {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--color-primary);
+}
+
+.modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background-color: rgba(22, 27, 34, 0.7);
+}
+
+/* Spinner for loading state */
+.spinner-border {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  vertical-align: text-bottom;
+  border: 0.15em solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-border .75s linear infinite;
+}
+
+.spinner-border-sm {
+  width: .75rem;
+  height: .75rem;
+  border-width: 0.15em;
+}
+
+@keyframes spinner-border {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+

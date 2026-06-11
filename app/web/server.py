@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.core.paths import DATA_DIR, PI_DIR
+from app.core.paths import DATA_DIR, PI_DIR, ROOT
 from app.api.v1 import router as v1_router
 from app.db.session import create_db_and_tables, engine
 from app.models.incident import Incident
@@ -157,13 +157,26 @@ def create_app() -> FastAPI:
 def _handle_chat_command(command: str, alert: dict[str, Any] | None) -> dict[str, Any]:
     normalized = command.strip().lower()
 
-    # 1. Explicit agent / incident commands
+    # 1. AI resource management triggers (create/modify agent/skill/extension/chain)
+    if any(token in normalized for token in ("create", "make", "modify", "generate", "add", "write", "tạo", "sửa", "viết", "thêm")):
+        if any(res_token in normalized for res_token in ("agent", "skill", "extension", "chain", "phương thức", "luồng")):
+            resource_res = _handle_resource_generation(command)
+            if resource_res:
+                return resource_res
+
+    # 2. Explicit agent / incident commands
     agent_response = _try_handle_agent_command(command)
     if agent_response:
         return agent_response
 
-    # 2. Pipeline analysis keywords
-    if any(token in normalized for token in ("run", "analyze", "triage", "phan tich", "phân tích")):
+    # 3. Pipeline analysis keywords
+    analysis_keywords = (
+        "run", "analyze", "triage", "phan tich", "phân tích", 
+        "sự cố", "tấn công", "tình huống", "truy vết", "điều tra", 
+        "investigate", "attack", "incident", "threat", "containment",
+        "phản ứng", "đối phó"
+    )
+    if any(token in normalized for token in analysis_keywords) or alert is not None:
         alert_path = _materialize_alert(alert, use_sample=alert is None)
         run_dir = _new_run_dir()
         triage = run_pipeline(alert_path, output_dir=run_dir)
@@ -174,7 +187,7 @@ def _handle_chat_command(command: str, alert: dict[str, Any] | None) -> dict[str
             **_run_response(run_dir, triage),
         }
 
-    # 3. Skill / plugin browsing
+    # 4. Skill / plugin browsing
     if any(token in normalized for token in ("skill", "plugin")):
         return {
             "mode": "resources",
@@ -182,7 +195,23 @@ def _handle_chat_command(command: str, alert: dict[str, Any] | None) -> dict[str
             "resources": _resource_index(),
         }
 
-    # 4. Free-form prompt → route through LLM agent on the most recent incident
+    # 5. Direct Conversational LLM Response (For free-form questions, help, chatting)
+    from app.llm.providers import GoogleGenAIProvider
+    provider = GoogleGenAIProvider()
+    if provider.is_configured:
+        res = provider.generate(command)
+        if res.available and res.text:
+            return {
+                "mode": "chat",
+                "assistant": res.text,
+            }
+        else:
+            return {
+                "mode": "chat",
+                "assistant": f"LLM Chat Error: {res.fallback_reason or 'empty response'}",
+            }
+
+    # 6. Fallback if provider is not configured but local incidents exist
     with Session(engine) as session:
         latest_incident = session.exec(
             select(Incident).order_by(Incident.updated_at.desc()).limit(1)
@@ -207,12 +236,12 @@ def _handle_chat_command(command: str, alert: dict[str, Any] | None) -> dict[str
             except Exception as exc:
                 return {
                     "mode": "chat",
-                    "assistant": f"Agent error: {exc}. Try: agent incident {latest_incident.id} explain details",
+                    "assistant": f"Agent error: {exc}. Try setting the Gemini API key in Settings.",
                 }
 
     return {
         "mode": "chat",
-        "assistant": "No incidents found yet. Ingest events first using the demo scenarios, then try again.",
+        "assistant": "LLM provider is not configured. Please go to Settings and enter your Gemini API Key.",
     }
 
 
@@ -420,7 +449,166 @@ def _latest_run() -> dict[str, Any] | None:
     return None
 
 
+
+def _safe_resource_name(name: str) -> str:
+    safe = Path(name).name.strip().replace(" ", "-")
+    if not safe or safe in {".", ".."} or any(part in safe for part in ("/", "\\")):
+        raise ValueError("invalid resource name")
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+    if any(ch not in allowed for ch in safe):
+        raise ValueError("resource name may only contain letters, numbers, dot, underscore, and dash")
+    return safe
+
+
+def _handle_resource_generation(command: str) -> dict[str, Any] | None:
+    from app.llm.providers import GoogleGenAIProvider
+
+    provider = GoogleGenAIProvider()
+    if not provider.is_configured:
+        return {
+            "mode": "chat",
+            "assistant": "LLM API Key is not configured. Please set your API key in settings first.",
+        }
+
+    normalized = command.lower()
+    existing_context = []
+
+    # Read existing resources if mentioned in the prompt
+    # 1. Skills
+    skills_dir = PI_DIR / "skills"
+    if skills_dir.exists():
+        for folder in skills_dir.iterdir():
+            if folder.is_dir() and folder.name.lower() in normalized:
+                manifest_path = folder / "SKILL.md"
+                if manifest_path.exists():
+                    existing_context.append(f"Skill '{folder.name}' Manifest (SKILL.md):\n{manifest_path.read_text(encoding='utf-8')}")
+                for script_path in folder.glob("*.py"):
+                    existing_context.append(f"Skill '{folder.name}' Script ({script_path.name}):\n{script_path.read_text(encoding='utf-8')}")
+
+    # 2. Agents
+    agents_dir = PI_DIR / "agents"
+    if agents_dir.exists():
+        for p in agents_dir.glob("*.md"):
+            if p.stem.lower() in normalized:
+                existing_context.append(f"Agent '{p.stem}':\n{p.read_text(encoding='utf-8')}")
+
+    # 3. Extensions
+    ext_dir = PI_DIR / "extensions"
+    if ext_dir.exists():
+        for folder in ext_dir.iterdir():
+            if folder.is_dir() and folder.name.lower() in normalized:
+                index_ts = folder / "index.ts"
+                if index_ts.exists():
+                    existing_context.append(f"Extension '{folder.name}' (index.ts):\n{index_ts.read_text(encoding='utf-8')}")
+
+    # 4. Chains
+    chains_dir = PI_DIR / "chains"
+    if chains_dir.exists():
+        for p in chains_dir.glob("*.yaml"):
+            if p.stem.lower() in normalized:
+                existing_context.append(f"Chain '{p.stem}':\n{p.read_text(encoding='utf-8')}")
+
+    existing_str = "\n\n".join(existing_context) if existing_context else "None"
+
+    prompt = f"""You are a senior cybersecurity automation engineer and Pi Coding Agent.
+The operator wants to manage (create or modify) local Pi resources for the Network Incident Response Orchestrator.
+Operator Request: {command}
+
+Existing Resources Mentioned in Request:
+{existing_str}
+
+Instructions:
+1. Generate the requested resource (agent, skill, extension, or chain) following the standard Pi structure.
+2. If creating or modifying a 'skill', provide both a 'manifest' (SKILL.md content starting with '---' frontmatter) and a 'script' (the executable python code containing 'def run(context):').
+3. If creating or modifying an 'agent', provide the full 'manifest' (starting with YAML frontmatter like 'role: ...' and then markdown description).
+4. If creating or modifying an 'extension', provide the TypeScript hook 'content' (e.g. implementing 'beforeToolCall' or similar hooks).
+5. If creating or modifying a 'chain', provide the YAML 'raw' configuration defining the DAG execution steps.
+6. Return a valid JSON response matching the schema.
+"""
+
+    res = provider.generate_json(prompt, {
+        "type": "object",
+        "properties": {
+            "explanation": {"type": "string"},
+            "resource_type": {"type": "string", "enum": ["agent", "skill", "extension", "chain"]},
+            "resource_name": {"type": "string"},
+            "manifest": {"type": "string"},
+            "script": {"type": "string"},
+            "content": {"type": "string"},
+            "raw": {"type": "string"}
+        },
+        "required": ["explanation", "resource_type", "resource_name"]
+    })
+
+    if not res.available or not res.text:
+        return {
+            "mode": "chat",
+            "assistant": f"Failed to generate resource using LLM: {res.fallback_reason or 'No response'}",
+        }
+
+    try:
+        parsed = json.loads(res.text)
+        res_type = parsed.get("resource_type")
+        res_name = _safe_resource_name(parsed.get("resource_name"))
+        explanation = parsed.get("explanation", "")
+
+        saved_files = []
+
+        if res_type == "agent":
+            manifest = parsed.get("manifest") or ""
+            target_dir = PI_DIR / "agents"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_file = target_dir / f"{res_name}.md"
+            target_file.write_text(manifest, encoding="utf-8")
+            saved_files.append(str(target_file))
+
+        elif res_type == "skill":
+            manifest = parsed.get("manifest") or ""
+            script = parsed.get("script") or ""
+            target_dir = PI_DIR / "skills" / res_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            manifest_file = target_dir / "SKILL.md"
+            manifest_file.write_text(manifest, encoding="utf-8")
+            saved_files.append(str(manifest_file))
+
+            script_name = f"{res_name.replace('-', '_')}.py"
+            script_file = target_dir / script_name
+            script_file.write_text(script, encoding="utf-8")
+            saved_files.append(str(script_file))
+
+        elif res_type == "extension":
+            content = parsed.get("content") or ""
+            target_dir = PI_DIR / "extensions" / res_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_file = target_dir / "index.ts"
+            target_file.write_text(content, encoding="utf-8")
+            saved_files.append(str(target_file))
+
+        elif res_type == "chain":
+            raw = parsed.get("raw") or ""
+            target_dir = PI_DIR / "chains"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_file = target_dir / f"{res_name}.yaml"
+            target_file.write_text(raw, encoding="utf-8")
+            saved_files.append(str(target_file))
+
+        saved_str = "\n".join(f"- {Path(f).relative_to(ROOT)}" for f in saved_files)
+        return {
+            "mode": "chat",
+            "assistant": f"### 🛠️ Resource Generated & Imported!\n\n**Action**: {explanation}\n**Type**: {res_type.upper()}\n**Name**: {res_name}\n\n**Saved Files**:\n{saved_str}\n\nPi runtime reloaded successfully. The new resource is now active in the system.",
+            "resources": _resource_index()
+        }
+
+    except Exception as exc:
+        return {
+            "mode": "chat",
+            "assistant": f"Failed to save and import generated resource: {exc}\n\nRaw LLM response:\n```json\n{res.text}\n```",
+        }
+
+
 app = create_app()
+
 
 
 def run_web() -> None:

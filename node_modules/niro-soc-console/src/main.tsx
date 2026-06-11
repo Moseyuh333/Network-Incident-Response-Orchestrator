@@ -321,6 +321,15 @@ function App() {
   const [llmApiKey, setLlmApiKey] = useState<string>("");
   const [llmSaveStatus, setLlmSaveStatus] = useState<string>("");
 
+  // Creation Modal States
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [createModalKind, setCreateModalKind] = useState<"agent" | "skill" | "extension" | "chain">("agent");
+  const [createModalName, setCreateModalName] = useState<string>("");
+  const [createModalMode, setCreateModalMode] = useState<"manual" | "ai">("manual");
+  const [createModalPrompt, setCreateModalPrompt] = useState<string>("");
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [generationError, setGenerationError] = useState<string>("");
+
   // Interactive Node Graph States
   const [selectedNodeDetails, setSelectedNodeDetails] = useState<any | null>(null);
   const [isGraphPaused, setIsGraphPaused] = useState<boolean>(false);
@@ -508,6 +517,12 @@ function App() {
         appendLog(`[AGENT_RUN_SUCCESS] Run ID: ${res.agent_run.id}`, "PI", "info");
       }
       await refreshData();
+      await Promise.all([
+        loadPiAgents(),
+        loadPiSkills(),
+        loadPiExtensions(),
+        loadPiChains()
+      ]).catch(() => {});
     } catch (e: any) {
       appendLog(`Error: ${e.message}`, "PI", "critical");
     } finally {
@@ -515,6 +530,7 @@ function App() {
       setBusy(false);
     }
   };
+
 
   // Action decision handlers
   const handleAction = async (actionId: number, type: "approve" | "reject" | "execute" | "rollback") => {
@@ -553,10 +569,23 @@ function App() {
     try {
       const res = await apiCall<AgentProfile[]>("/api/v1/pi/agents");
       setPiAgents(res);
-      if (res.length > 0) {
-        setSelectedAgent(res[0]);
-        setAgentEditRaw(res[0].raw);
-      }
+      setSelectedAgent((prev) => {
+        if (prev && res.some((ag) => ag.name === prev.name)) {
+          const updated = res.find((ag) => ag.name === prev.name)!;
+          // Keep raw content updated but maintain selection
+          setAgentEditRaw((currentRaw) => {
+            if (currentRaw === prev.raw) return updated.raw;
+            return currentRaw;
+          });
+          return updated;
+        }
+        if (res.length > 0) {
+          setAgentEditRaw(res[0].raw);
+          return res[0];
+        }
+        setAgentEditRaw("");
+        return null;
+      });
     } catch (e: any) {
       appendLog(`Failed to load agents: ${e.message}`, "SYSTEM", "critical");
     }
@@ -566,10 +595,19 @@ function App() {
     try {
       const res = await apiCall<PiSkill[]>("/api/v1/pi/skills");
       setPiSkills(res);
-      if (res.length > 0) {
-        setSelectedSkillName(res[0].name);
-        setSkillEditManifest(res[0].raw);
-      }
+      setSelectedSkillName((prev) => {
+        const stillExists = prev && res.some((sk) => sk.name === prev);
+        if (stillExists) {
+          return prev;
+        }
+        if (res.length > 0) {
+          void selectSkill(res[0].name);
+          return res[0].name;
+        }
+        setSkillEditManifest("");
+        setSkillEditScript("");
+        return "";
+      });
     } catch (e: any) {
       appendLog(`Failed to load skills: ${e.message}`, "SYSTEM", "critical");
     }
@@ -579,10 +617,22 @@ function App() {
     try {
       const res = await apiCall<PiExtension[]>("/api/v1/pi/extensions");
       setPiExtensions(res);
-      if (res.length > 0) {
-        setSelectedExtension(res[0]);
-        setExtensionEditContent(res[0].content);
-      }
+      setSelectedExtension((prev) => {
+        if (prev && res.some((ext) => ext.name === prev.name)) {
+          const updated = res.find((ext) => ext.name === prev.name)!;
+          setExtensionEditContent((currentContent) => {
+            if (currentContent === prev.content) return updated.content;
+            return currentContent;
+          });
+          return updated;
+        }
+        if (res.length > 0) {
+          setExtensionEditContent(res[0].content);
+          return res[0];
+        }
+        setExtensionEditContent("");
+        return null;
+      });
     } catch (e: any) {
       appendLog(`Failed to load extensions: ${e.message}`, "SYSTEM", "critical");
     }
@@ -592,14 +642,27 @@ function App() {
     try {
       const res = await apiCall<PiChain[]>("/api/v1/pi/chains");
       setPiChains(res);
-      if (res.length > 0) {
-        setSelectedChain(res[0]);
-        setChainEditRaw(res[0].raw);
-      }
+      setSelectedChain((prev) => {
+        if (prev && res.some((ch) => ch.name === prev.name)) {
+          const updated = res.find((ch) => ch.name === prev.name)!;
+          setChainEditRaw((currentRaw) => {
+            if (currentRaw === prev.raw) return updated.raw;
+            return currentRaw;
+          });
+          return updated;
+        }
+        if (res.length > 0) {
+          setChainEditRaw(res[0].raw);
+          return res[0];
+        }
+        setChainEditRaw("");
+        return null;
+      });
     } catch (e: any) {
       appendLog(`Failed to load chains: ${e.message}`, "SYSTEM", "critical");
     }
   }, [appendLog]);
+
 
   const loadPiPrompts = useCallback(async () => {
     try {
@@ -653,18 +716,110 @@ function App() {
     appendLog("Pi runtime resources reloaded from .pi.", "PI", "normal");
   };
 
+  const openCreationModal = (kind: "agent" | "skill" | "extension" | "chain") => {
+    setCreateModalKind(kind);
+    setCreateModalName("");
+    setCreateModalPrompt("");
+    setCreateModalMode("manual");
+    setGenerationError("");
+    setIsCreateModalOpen(true);
+  };
+
+  const executeCreation = async () => {
+    const name = createModalName.trim();
+    if (!name) {
+      setGenerationError("Resource name is required.");
+      return;
+    }
+    const cleanName = name.replace(/\s+/g, "-").toLowerCase();
+
+    setIsGenerating(true);
+    setGenerationError("");
+
+    try {
+      if (createModalMode === "manual") {
+        if (createModalKind === "agent") {
+          const raw = `---\nrole: Custom incident response agent\ninput_artifact: incident_evidence\noutput_artifact: analyst_guidance\nallowed_skills: []\nallowed_tools: [query_events, propose_action]\nmaximum_iterations: 4\nmaximum_tool_calls: 8\nsafety_profile: read-only\n---\n\n# ${cleanName}\n\nDefine this agent's mission, tool boundaries, and escalation behavior here.\n`;
+          await apiCall<any>(`/api/v1/pi/agents/${encodeURIComponent(cleanName)}`, {
+            method: "PUT",
+            body: JSON.stringify({ raw })
+          });
+          appendLog(`Agent ${cleanName} created manually.`, "AGENTS", "normal");
+          await reloadPiRuntime();
+          await loadPiAgents();
+        } else if (createModalKind === "skill") {
+          const manifest = `---\nname: ${cleanName}\ndescription: Custom defensive response skill\ntriggers: [manual]\ninputs: [incident]\noutputs: [analysis]\nsafety: read-only\n---\n\n# ${cleanName}\n\nDescribe when the agent should use this skill and what evidence it must inspect.\n`;
+          const script = `def run(context):\n    return {\"status\": \"ok\", \"skill\": \"${cleanName}\"}\n`;
+          await apiCall<any>(`/api/v1/pi/skills/${encodeURIComponent(cleanName)}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              manifest,
+              script,
+              script_name: `${cleanName.replace(/-/g, "_")}.py`
+            })
+          });
+          appendLog(`Skill ${cleanName} created manually.`, "SKILLS", "normal");
+          await reloadPiRuntime();
+          await loadPiSkills();
+          await selectSkill(cleanName);
+        } else if (createModalKind === "extension") {
+          const content = `export const extension = {\n  name: "${cleanName}",\n  description: "Custom Pi extension hook",\n  async beforeToolCall(ctx: unknown) {\n    return { allow: true, ctx };\n  }\n};\n`;
+          await apiCall<any>(`/api/v1/pi/extensions/${encodeURIComponent(cleanName)}`, {
+            method: "PUT",
+            body: JSON.stringify({ content })
+          });
+          appendLog(`Extension ${cleanName} created manually.`, "EXTENSIONS", "normal");
+          await reloadPiRuntime();
+          await loadPiExtensions();
+        } else if (createModalKind === "chain") {
+          const raw = `name: ${cleanName}\nentry: intake-agent\nsteps:\n  - id: intake-agent\n    next: evidence-agent\n  - id: evidence-agent\n    next: triage-agent\n  - id: triage-agent\n    next: response-planner-agent\n  - id: response-planner-agent\n`;
+          await apiCall<any>(`/api/v1/pi/chains/${encodeURIComponent(cleanName)}`, {
+            method: "PUT",
+            body: JSON.stringify({ raw })
+          });
+          appendLog(`Chain ${cleanName} created manually.`, "CHAINS", "normal");
+          await reloadPiRuntime();
+          await loadPiChains();
+        }
+      } else {
+        const promptText = createModalPrompt.trim();
+        if (!promptText) {
+          setGenerationError("Prompt/instructions are required for AI generation.");
+          setIsGenerating(false);
+          return;
+        }
+
+        const res = await apiCall<any>("/api/v1/pi/generate", {
+          method: "POST",
+          body: JSON.stringify({
+            kind: createModalKind,
+            name: cleanName,
+            prompt: promptText
+          })
+        });
+
+        appendLog(`[AI_GENERATOR] successfully generated and imported ${createModalKind} "${cleanName}" (${res.explanation})`, "PI", "info");
+        await reloadPiRuntime();
+
+        if (createModalKind === "agent") await loadPiAgents();
+        else if (createModalKind === "skill") {
+          await loadPiSkills();
+          await selectSkill(cleanName);
+        }
+        else if (createModalKind === "extension") await loadPiExtensions();
+        else if (createModalKind === "chain") await loadPiChains();
+      }
+
+      setIsCreateModalOpen(false);
+    } catch (err: any) {
+      setGenerationError(err.message || "Failed to create resource.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const createAgent = async () => {
-    const name = newAgentName.trim();
-    if (!name) return;
-    const raw = `---\nrole: Custom incident response agent\ninput_artifact: incident_evidence\noutput_artifact: analyst_guidance\nallowed_skills: []\nallowed_tools: [query_events, propose_action]\nmaximum_iterations: 4\nmaximum_tool_calls: 8\nsafety_profile: read-only\n---\n\n# ${name}\n\nDefine this agent's mission, tool boundaries, and escalation behavior here.\n`;
-    await apiCall<any>(`/api/v1/pi/agents/${encodeURIComponent(name)}`, {
-      method: "PUT",
-      body: JSON.stringify({ raw })
-    });
-    setNewAgentName("");
-    appendLog(`Agent ${name} created.`, "AGENTS", "normal");
-    await reloadPiRuntime();
-    await loadPiAgents();
+    // Stub
   };
 
   const saveAgent = async () => {
@@ -2272,17 +2427,13 @@ function App() {
 
             <div className="double-panel">
               <div className="double-panel-left">
-                <div className="resource-create-row">
-                  <input
-                    type="text"
-                    placeholder="new-agent-name"
-                    value={newAgentName}
-                    onChange={(e) => setNewAgentName(e.target.value)}
-                  />
-                  <button className="btn btn-info icon-btn" onClick={() => void createAgent()} title="Create agent">
-                    <Plus size={14} />
-                  </button>
-                </div>
+                <button
+                  className="btn btn-info"
+                  style={{ width: "100%", marginBottom: "12px", display: "flex", gap: "8px" }}
+                  onClick={() => openCreationModal("agent")}
+                >
+                  <Plus size={14} /> Create Agent / AI Assist
+                </button>
                 {piAgents.map((ag) => (
                   <div
                     key={ag.name}
@@ -2386,17 +2537,13 @@ function App() {
 
             <div className="double-panel">
               <div className="double-panel-left">
-                <div className="resource-create-row">
-                  <input
-                    type="text"
-                    placeholder="new-skill-name"
-                    value={newSkillName}
-                    onChange={(e) => setNewSkillName(e.target.value)}
-                  />
-                  <button className="btn btn-info icon-btn" onClick={() => void createSkill()} title="Create skill">
-                    <Plus size={14} />
-                  </button>
-                </div>
+                <button
+                  className="btn btn-info"
+                  style={{ width: "100%", marginBottom: "12px", display: "flex", gap: "8px" }}
+                  onClick={() => openCreationModal("skill")}
+                >
+                  <Plus size={14} /> Create Skill / AI Assist
+                </button>
                 {piSkills.map((sk) => (
                   <button
                     key={sk.name}
@@ -2485,17 +2632,13 @@ function App() {
 
             <div className="double-panel">
               <div className="double-panel-left">
-                <div className="resource-create-row">
-                  <input
-                    type="text"
-                    placeholder="new-extension-name"
-                    value={newExtensionName}
-                    onChange={(e) => setNewExtensionName(e.target.value)}
-                  />
-                  <button className="btn btn-info icon-btn" onClick={() => void createExtension()} title="Create extension">
-                    <Plus size={14} />
-                  </button>
-                </div>
+                <button
+                  className="btn btn-info"
+                  style={{ width: "100%", marginBottom: "12px", display: "flex", gap: "8px" }}
+                  onClick={() => openCreationModal("extension")}
+                >
+                  <Plus size={14} /> Create Extension / AI Assist
+                </button>
                 {piExtensions.map((ext) => (
                   <div
                     key={ext.name}
@@ -2567,17 +2710,13 @@ function App() {
 
             <div className="double-panel">
               <div className="double-panel-left">
-                <div className="resource-create-row">
-                  <input
-                    type="text"
-                    placeholder="new-chain-name"
-                    value={newChainName}
-                    onChange={(e) => setNewChainName(e.target.value)}
-                  />
-                  <button className="btn btn-info icon-btn" onClick={() => void createChain()} title="Create chain">
-                    <Plus size={14} />
-                  </button>
-                </div>
+                <button
+                  className="btn btn-info"
+                  style={{ width: "100%", marginBottom: "12px", display: "flex", gap: "8px" }}
+                  onClick={() => openCreationModal("chain")}
+                >
+                  <Plus size={14} /> Create Chain / AI Assist
+                </button>
                 {piChains.map((ch) => (
                   <div
                     key={ch.name}
@@ -2885,6 +3024,92 @@ function App() {
           </div>
         )}
       </div>
+
+      {isCreateModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h3>Create New {createModalKind.toUpperCase()}</h3>
+              <button className="modal-close-btn" onClick={() => setIsCreateModalOpen(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              {generationError && (
+                <div className="modal-error-message">
+                  {generationError}
+                </div>
+              )}
+              <div className="form-group">
+                <label>Name</label>
+                <input
+                  type="text"
+                  placeholder={`e.g. custom-${createModalKind}`}
+                  value={createModalName}
+                  onChange={(e) => setCreateModalName(e.target.value)}
+                  disabled={isGenerating}
+                />
+              </div>
+              <div className="form-group">
+                <label>Creation Mode</label>
+                <div className="mode-selector">
+                  <button
+                    type="button"
+                    className={`mode-btn ${createModalMode === "manual" ? "active" : ""}`}
+                    onClick={() => setCreateModalMode("manual")}
+                    disabled={isGenerating}
+                  >
+                    Manual Template
+                  </button>
+                  <button
+                    type="button"
+                    className={`mode-btn ${createModalMode === "ai" ? "active" : ""}`}
+                    onClick={() => setCreateModalMode("ai")}
+                    disabled={isGenerating}
+                  >
+                    AI Generator
+                  </button>
+                </div>
+              </div>
+              {createModalMode === "ai" && (
+                <div className="form-group">
+                  <label>Describe what this {createModalKind} should do</label>
+                  <textarea
+                    placeholder={`e.g. Write a ${createModalKind} that analyzes SSH log entries for brute force patterns...`}
+                    value={createModalPrompt}
+                    onChange={(e) => setCreateModalPrompt(e.target.value)}
+                    disabled={isGenerating}
+                    rows={4}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setIsCreateModalOpen(false)}
+                disabled={isGenerating}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-info"
+                onClick={() => void executeCreation()}
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" style={{ marginRight: '6px' }}></span>
+                    Generating...
+                  </>
+                ) : (
+                  "Create"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
