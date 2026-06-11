@@ -176,7 +176,7 @@ def _handle_chat_command(command: str, alert: dict[str, Any] | None) -> dict[str
         "investigate", "attack", "incident", "threat", "containment",
         "phản ứng", "đối phó"
     )
-    if any(token in normalized for token in analysis_keywords) or alert is not None:
+    if any(token in normalized for token in analysis_keywords):
         alert_path = _materialize_alert(alert, use_sample=alert is None)
         run_dir = _new_run_dir()
         triage = run_pipeline(alert_path, output_dir=run_dir)
@@ -404,6 +404,12 @@ def _materialize_alert(alert: dict[str, Any] | None, use_sample: bool) -> Path:
     alerts_dir = RUNTIME_DIR / "alerts"
     alerts_dir.mkdir(parents=True, exist_ok=True)
     alert_path = alerts_dir / f"alert-{_now_slug()}.json"
+    
+    # Ensure alert_id is always present
+    if "alert_id" not in alert:
+        alert = dict(alert)
+        alert["alert_id"] = f"ALT-{_now_slug().upper()}"
+        
     alert_path.write_text(json.dumps(alert, indent=2, ensure_ascii=False), encoding="utf-8")
     return alert_path
 
