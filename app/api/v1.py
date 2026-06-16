@@ -186,10 +186,66 @@ def run_incident_agent(
             str(payload.get("task") or "Analyze this incident and recommend safe response actions."),
             PI_DIR,
             payload.get("max_tool_calls"),
+            int(payload.get("max_iterations") or 8),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _agent_run_dict(agent_run)
+
+
+@router.post("/agent/chat")
+def agent_chat(
+    payload: dict[str, Any],
+    session: Annotated[Session, Depends(get_session)],
+) -> dict[str, Any]:
+    """Operator chat with the LLM analyst. Answers are evidence-grounded
+    when an ``incident_id`` is supplied; the LLM is otherwise answering in
+    'global system' mode (per PDF §11).
+
+    Unlike ``/api/command`` this endpoint is purely a chat surface — it
+    does not dispatch the agent tool loop, it asks the LLM to respond
+    with structured analysis of the supplied context.
+    """
+    question = str(payload.get("command") or payload.get("question") or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="command/question is required")
+
+    incident_id = payload.get("incident_id")
+    incident = None
+    if incident_id is not None:
+        incident = session.get(Incident, int(incident_id))
+        if incident is None:
+            raise HTTPException(status_code=404, detail=f"incident {incident_id} not found")
+
+    from app.agents.incident_response_agent import IncidentResponseAgent
+
+    agent = IncidentResponseAgent(PI_DIR)
+    ctx = {
+        "task": question,
+        "selected_skill": None,
+        "available_tools": [],
+        "tool_results": {},
+        "classification": {
+            "label": incident.incident_type if incident else "global",
+            "severity": incident.severity if incident else "info",
+            "confidence": incident.confidence if incident else 1.0,
+        },
+        "incident": incident.model_dump() if incident else {"scope": "global"},
+        "mitre_attack": [],
+        "containment_actions": [],
+    }
+    result = agent.analyze(ctx)
+    return {
+        "available": result.get("available", False),
+        "incident_id": getattr(incident, "id", None),
+        "scope": "incident" if incident else "global",
+        "summary": result.get("summary"),
+        "reasoning_summary": result.get("reasoning_summary"),
+        "mitre_mapping": result.get("mitre_mapping") or [],
+        "recommended_actions": result.get("recommended_actions") or [],
+        "model": result.get("model"),
+        "provider": result.get("provider"),
+    }
 
 
 @router.get("/agent/runs")
@@ -198,6 +254,35 @@ def list_agent_runs(session: Annotated[Session, Depends(get_session)]) -> list[d
         _agent_run_dict(agent_run)
         for agent_run in session.exec(select(AgentRun).order_by(AgentRun.started_at.desc()).limit(100)).all()
     ]
+
+
+@router.post("/agent/runs/{run_id}/cancel")
+def cancel_agent_run(
+    run_id: int,
+    session: Annotated[Session, Depends(get_session)],
+) -> dict[str, Any]:
+    """Mark an in-flight agent run as cancelled.
+
+    Cancellation is cooperative — the running tool loop will see the
+    status change on its next iteration and bail out. The endpoint
+    returns 404 if the run is unknown and 409 if it has already
+    terminated (completed / failed / cancelled) so the operator gets
+    a clear signal.
+    """
+    run = session.get(AgentRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"agent run {run_id} not found")
+    if run.status not in ("running",):
+        raise HTTPException(
+            status_code=409,
+            detail=f"agent run {run_id} is in terminal state '{run.status}' and cannot be cancelled",
+        )
+    run.status = "cancelled"
+    run.ended_at = datetime.utcnow()
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    return _agent_run_dict(run)
 
 
 @router.post("/incidents/{incident_id}/status")

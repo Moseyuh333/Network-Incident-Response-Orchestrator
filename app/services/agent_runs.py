@@ -23,8 +23,16 @@ def run_agent_for_incident(
     task: str,
     pi_dir: Path,
     max_tool_calls: int | None = None,
+    max_iterations: int = 8,
 ) -> AgentRun:
-    """Run a bounded incident response agent and persist the full run."""
+    """Run a bounded incident response agent and persist the full run.
+
+    Bounds (per Master Super-Prompt V3 §10):
+    - ``max_iterations``  : outer LLM turn budget (default 8)
+    - ``max_tool_calls``  : total tool-call budget (default 5, capped 10)
+    Both are enforced inside the loop so a runaway agent can't drain
+    quota or hang the pipeline.
+    """
     incident = session.get(Incident, incident_id)
     if incident is None:
         raise ValueError(f"incident {incident_id} not found")
@@ -32,7 +40,9 @@ def run_agent_for_incident(
     skill_registry = SkillRegistry(pi_dir / "skills")
     skill = skill_registry.select(task, incident.incident_type)
     allowed_tools = skill.allowed_tools if skill and skill.allowed_tools else AgentToolRuntime.default_tool_names()
+    # Honor skill max_tool_calls when present, capped at 10 to keep latency bounded
     call_budget = min(max_tool_calls or (skill.max_tool_calls if skill else 5), 10)
+    iteration_budget = max_iterations
 
     agent_run = AgentRun(incident_id=incident.id, task=task)
     session.add(agent_run)
@@ -43,10 +53,17 @@ def run_agent_for_incident(
     tool_results: dict[str, Any] = {}
     try:
         planned_calls = _planned_tool_calls(incident, task)
+        # Enforce both per-iteration and total budgets (PDF §10).
+        calls_executed = 0
+        iterations = 0
         for tool_name, arguments in planned_calls[:call_budget]:
+            if iterations >= iteration_budget:
+                break
             if tool_name not in allowed_tools:
                 continue
             tool_results[tool_name] = runtime.call(agent_run, tool_name, arguments)
+            calls_executed += 1
+            iterations += 1
 
         analysis_context = _agent_context(incident, task, skill, runtime.list_tools(), tool_results)
         analysis = IncidentResponseAgent(pi_dir).analyze(analysis_context)
@@ -67,6 +84,8 @@ def run_agent_for_incident(
             "selected_skill": skill.id if skill else None,
             "tool_calls_planned": len(planned_calls),
             "tool_calls_budget": call_budget,
+            "tool_calls_executed": calls_executed,
+            "max_iterations": iteration_budget,
             "tool_results": {name: _summarize_tool_payload(payload) for name, payload in tool_results.items()},
         }
         session.add(agent_run)
