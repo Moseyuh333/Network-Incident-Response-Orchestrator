@@ -14,7 +14,6 @@ import json
 import os
 import sys
 import time
-from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -313,7 +312,7 @@ def main() -> int:
     print("─" * 78)
     print(f"LLM integration report ({elapsed:.1f}s total):")
     print(f"  Passed: {passed}/{len(selected)}")
-    print(f"  Latency: each call costs ~2-30s depending on model and load")
+    print("  Latency: each call costs ~2-30s depending on model and load")
 
     if not args.no_write:
         results_dir = HERE / "results"
