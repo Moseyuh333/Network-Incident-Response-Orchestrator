@@ -1,0 +1,543 @@
+{
+  "timestamp": "2026-06-16T15:55:56.194416+00:00",
+  "duration_seconds": 5.031,
+  "summary": {
+    "detected": 12,
+    "partial": 4,
+    "known_gap": 6,
+    "false_positive": 2,
+    "clean": 1
+  },
+  "results": [
+    {
+      "id": "s01",
+      "title": "Horizontal port scan (baseline)",
+      "category": "detect",
+      "expected_findings": [
+        "Port Scan"
+      ],
+      "actual_findings": [
+        "Port Scan",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation"
+      ],
+      "matched": [
+        "Port Scan"
+      ],
+      "unexpected": [
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation"
+      ],
+      "verdict": "detected",
+      "events_ingested": 12,
+      "duration_seconds": 0.218,
+      "error": null,
+      "notes": "12 distinct destination ports from one source in a 60s window."
+    },
+    {
+      "id": "s02",
+      "title": "SSH brute force (baseline)",
+      "category": "detect",
+      "expected_findings": [
+        "Brute Force"
+      ],
+      "actual_findings": [
+        "Brute Force",
+        "C2 Beaconing"
+      ],
+      "matched": [
+        "Brute Force"
+      ],
+      "unexpected": [
+        "C2 Beaconing"
+      ],
+      "verdict": "detected",
+      "events_ingested": 6,
+      "duration_seconds": 0.078,
+      "error": null,
+      "notes": "6 failed logins to the same account in 120s."
+    },
+    {
+      "id": "s03",
+      "title": "SQL injection in web URL",
+      "category": "detect",
+      "expected_findings": [
+        "Web Attack"
+      ],
+      "actual_findings": [
+        "Web Attack",
+        "Web Attack"
+      ],
+      "matched": [
+        "Web Attack"
+      ],
+      "unexpected": [],
+      "verdict": "detected",
+      "events_ingested": 2,
+      "duration_seconds": 0.047,
+      "error": null,
+      "notes": "URL contains UNION SELECT and OR 1=1 tautology patterns."
+    },
+    {
+      "id": "s04",
+      "title": "Bulk data exfiltration to public host",
+      "category": "detect",
+      "expected_findings": [
+        "Data Exfiltration"
+      ],
+      "actual_findings": [
+        "Data Exfiltration"
+      ],
+      "matched": [
+        "Data Exfiltration"
+      ],
+      "unexpected": [],
+      "verdict": "detected",
+      "events_ingested": 1,
+      "duration_seconds": 0.032,
+      "error": null,
+      "notes": "Single 60MB outbound transfer to public IP, exceeds 50MB threshold."
+    },
+    {
+      "id": "s05",
+      "title": "C2 beaconing (low jitter, periodic)",
+      "category": "detect",
+      "expected_findings": [
+        "C2 Beaconing"
+      ],
+      "actual_findings": [
+        "C2 Beaconing"
+      ],
+      "matched": [
+        "C2 Beaconing"
+      ],
+      "unexpected": [],
+      "verdict": "detected",
+      "events_ingested": 7,
+      "duration_seconds": 0.062,
+      "error": null,
+      "notes": "7 connections to the same host:port exactly 15s apart."
+    },
+    {
+      "id": "s06",
+      "title": "HTTP flood targeting a single host",
+      "category": "detect",
+      "expected_findings": [
+        "DDoS/Flood"
+      ],
+      "actual_findings": [
+        "DDoS/Flood"
+      ],
+      "matched": [
+        "DDoS/Flood"
+      ],
+      "unexpected": [],
+      "verdict": "detected",
+      "events_ingested": 150,
+      "duration_seconds": 1.219,
+      "error": null,
+      "notes": "150 events to one target in 60s, well above the 100 threshold."
+    },
+    {
+      "id": "s07",
+      "title": "Access to blocked management port (445)",
+      "category": "detect",
+      "expected_findings": [
+        "Policy Violation"
+      ],
+      "actual_findings": [
+        "Policy Violation"
+      ],
+      "matched": [
+        "Policy Violation"
+      ],
+      "unexpected": [],
+      "verdict": "detected",
+      "events_ingested": 1,
+      "duration_seconds": 0.047,
+      "error": null,
+      "notes": "Direct connection attempt to SMB port 445 from external host."
+    },
+    {
+      "id": "s08",
+      "title": "Internal host scans 12 corporate servers",
+      "category": "detect",
+      "expected_findings": [
+        "Port Scan",
+        "Policy Violation"
+      ],
+      "actual_findings": [
+        "Port Scan",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation"
+      ],
+      "matched": [
+        "Port Scan",
+        "Policy Violation"
+      ],
+      "unexpected": [],
+      "verdict": "detected",
+      "events_ingested": 12,
+      "duration_seconds": 0.406,
+      "error": null,
+      "notes": "Compromised insider pivots across the internal network."
+    },
+    {
+      "id": "s09",
+      "title": "Slow port scan (1 port per 5 minutes)",
+      "category": "known_gap",
+      "expected_findings": [],
+      "actual_findings": [
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation"
+      ],
+      "matched": [],
+      "unexpected": [
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation"
+      ],
+      "verdict": "partial",
+      "events_ingested": 12,
+      "duration_seconds": 0.297,
+      "error": null,
+      "notes": "GAP: port_scan_window_seconds=60. 12 ports over 60 minutes are far below the rolling window. Real attackers use this to evade. Mitigation would require a longer window or session-based aggregation."
+    },
+    {
+      "id": "s10",
+      "title": "Distributed SSH brute force (10 IPs × 1 attempt)",
+      "category": "known_gap",
+      "expected_findings": [],
+      "actual_findings": [],
+      "matched": [],
+      "unexpected": [],
+      "verdict": "known_gap",
+      "events_ingested": 10,
+      "duration_seconds": 0.109,
+      "error": null,
+      "notes": "GAP: brute_force is per-source-IP with threshold=5. A botnet with 1 attempt per IP stays invisible. Mitigation requires aggregating across sources targeting the same destination+user."
+    },
+    {
+      "id": "s11",
+      "title": "RDP brute force (3389)",
+      "category": "known_gap",
+      "expected_findings": [],
+      "actual_findings": [
+        "C2 Beaconing",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation"
+      ],
+      "matched": [],
+      "unexpected": [
+        "C2 Beaconing",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation"
+      ],
+      "verdict": "partial",
+      "events_ingested": 6,
+      "duration_seconds": 0.203,
+      "error": null,
+      "notes": "GAP: rule_engine.detect_brute_force only matches event_type in {ssh, auth, login, authentication}. RDP/WinRM/RPC are missing. Mitigation: extend the event_type whitelist to include 'rdp', 'winrm', 'rpc'."
+    },
+    {
+      "id": "s12",
+      "title": "C2 with 40% jitter (modern malware)",
+      "category": "known_gap",
+      "expected_findings": [],
+      "actual_findings": [],
+      "matched": [],
+      "unexpected": [],
+      "verdict": "known_gap",
+      "events_ingested": 12,
+      "duration_seconds": 0.109,
+      "error": null,
+      "notes": "GAP: rule_engine jitter check is `jitter < 10.0 or jitter/avg < 0.2`. Real-world C2s (Cobalt Strike sleep-mask, Mythic) routinely use 30-50% jitter. This scenario uses ~40% jitter and so should NOT fire. Mitigation: switch to autocorrelation / FFT-based periodicity scoring."
+    },
+    {
+      "id": "s13",
+      "title": "Credential stuffing (valid creds, many users)",
+      "category": "known_gap",
+      "expected_findings": [],
+      "actual_findings": [],
+      "matched": [],
+      "unexpected": [],
+      "verdict": "known_gap",
+      "events_ingested": 10,
+      "duration_seconds": 0.078,
+      "error": null,
+      "notes": "GAP: brute-force rule only triggers on failed logins. Credential stuffing with valid credentials is invisible. Mitigation: baseline per-user login rate and alert on impossible-travel / many-users-from-one-IP."
+    },
+    {
+      "id": "s14",
+      "title": "Slow exfiltration (5MB chunks, 30 minutes)",
+      "category": "known_gap",
+      "expected_findings": [],
+      "actual_findings": [
+        "C2 Beaconing"
+      ],
+      "matched": [],
+      "unexpected": [
+        "C2 Beaconing"
+      ],
+      "verdict": "partial",
+      "events_ingested": 30,
+      "duration_seconds": 0.266,
+      "error": null,
+      "notes": "GAP: exfil_window_seconds=300. 5MB every 5 minutes never reaches the 50MB threshold inside any single window. Real-world APT groups do exactly this. Mitigation: keep rolling counters per destination or switch to a rate-based detector (MB/hour)."
+    },
+    {
+      "id": "s15",
+      "title": "DNS tunneling (high-entropy subdomain queries)",
+      "category": "known_gap",
+      "expected_findings": [],
+      "actual_findings": [],
+      "matched": [],
+      "unexpected": [],
+      "verdict": "known_gap",
+      "events_ingested": 40,
+      "duration_seconds": 0.313,
+      "error": null,
+      "notes": "GAP: no DNS-content detector. Mitigations: (1) per-domain entropy detector (Shannon > 4.5), (2) per-domain length detector (label > 30 chars), (3) NXDOMAIN rate spike, (4) TXT-record volume. The ML anomaly detector sees UDP/53 with low bytes_out and scores it as benign, so no flag here either."
+    },
+    {
+      "id": "s16",
+      "title": "Chunked HTTPS exfil (5MB × 12 requests, 30s apart)",
+      "category": "known_gap",
+      "expected_findings": [],
+      "actual_findings": [
+        "Data Exfiltration",
+        "C2 Beaconing"
+      ],
+      "matched": [],
+      "unexpected": [
+        "Data Exfiltration",
+        "C2 Beaconing"
+      ],
+      "verdict": "partial",
+      "events_ingested": 12,
+      "duration_seconds": 0.156,
+      "error": null,
+      "notes": "GAP: same root cause as s14 (slow exfil). 5MB chunks over 6 minutes never aggregate above 50MB in the rolling window. ML could potentially flag this if it saw a per-flow aggregate, but it currently only examines one event at a time."
+    },
+    {
+      "id": "s17",
+      "title": "Lateral movement via SMB (10 internal hosts)",
+      "category": "detect",
+      "expected_findings": [
+        "Policy Violation"
+      ],
+      "actual_findings": [
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation"
+      ],
+      "matched": [
+        "Policy Violation"
+      ],
+      "unexpected": [],
+      "verdict": "detected",
+      "events_ingested": 10,
+      "duration_seconds": 0.344,
+      "error": null,
+      "notes": "Each connection to port 445 (blocked) fires a policy violation. The rule engine does NOT correlate 'same source hitting many internal hosts' as lateral movement — that's a known gap (no lateral-movement detector). We mark Policy Violation as the expected detection."
+    },
+    {
+      "id": "s18",
+      "title": "Webshell command execution (POST with cmd parameter)",
+      "category": "detect",
+      "expected_findings": [
+        "Web Attack"
+      ],
+      "actual_findings": [
+        "Web Attack",
+        "Web Attack"
+      ],
+      "matched": [
+        "Web Attack"
+      ],
+      "unexpected": [],
+      "verdict": "detected",
+      "events_ingested": 2,
+      "duration_seconds": 0.046,
+      "error": null,
+      "notes": "URLs contain shell-metacharacter + command patterns which the web-attack regex detects. The rule does NOT know that the host has a webshell (would need a baseline of allowed URLs) but the URLs themselves look malicious so this should fire."
+    },
+    {
+      "id": "s19",
+      "title": "Phishing page (lookalike domain, credential form)",
+      "category": "known_gap",
+      "expected_findings": [],
+      "actual_findings": [],
+      "matched": [],
+      "unexpected": [],
+      "verdict": "known_gap",
+      "events_ingested": 2,
+      "duration_seconds": 0.032,
+      "error": null,
+      "notes": "GAP: web-attack regex doesn't have a phishing pattern. The URL is structurally innocent. Mitigation options: (1) domain reputation feed, (2) Levenshtein-distance check on lookalike domains, (3) URL allowlist for known-good login pages."
+    },
+    {
+      "id": "s20",
+      "title": "Cryptominer pool connection (stratum+tcp)",
+      "category": "detect",
+      "expected_findings": [
+        "C2 Beaconing"
+      ],
+      "actual_findings": [
+        "C2 Beaconing"
+      ],
+      "matched": [
+        "C2 Beaconing"
+      ],
+      "unexpected": [],
+      "verdict": "detected",
+      "events_ingested": 8,
+      "duration_seconds": 0.125,
+      "error": null,
+      "notes": "Periodic 30s beacons to a stratum mining pool. Detected as C2 beaconing because the shape is identical. This is a true positive even though the C2 label is semantically wrong (it is a miner, not a C2). The rule doesn't distinguish; from the rule's perspective it's a periodic external connection."
+    },
+    {
+      "id": "s21",
+      "title": "Tor traffic (connections to known exit relays)",
+      "category": "known_gap",
+      "expected_findings": [],
+      "actual_findings": [],
+      "matched": [],
+      "unexpected": [],
+      "verdict": "known_gap",
+      "events_ingested": 5,
+      "duration_seconds": 0.047,
+      "error": null,
+      "notes": "GAP: no Tor-exit-list or anonymity-network detector. Mitigation: subscribe to the dan.me.uk / TorProject exit list and check dst_ips. Could be added as a policy file (.pi/data/policies/tor_exits.json) and reused by the rule engine."
+    },
+    {
+      "id": "s22",
+      "title": "Multi-stage attack (scan → exploit → exfil → beacon)",
+      "category": "detect",
+      "expected_findings": [
+        "Port Scan",
+        "Web Attack",
+        "Data Exfiltration",
+        "C2 Beaconing"
+      ],
+      "actual_findings": [
+        "Port Scan",
+        "Web Attack",
+        "Data Exfiltration",
+        "C2 Beaconing",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation"
+      ],
+      "matched": [
+        "Port Scan",
+        "Web Attack",
+        "Data Exfiltration",
+        "C2 Beaconing"
+      ],
+      "unexpected": [
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation",
+        "Policy Violation"
+      ],
+      "verdict": "detected",
+      "events_ingested": 21,
+      "duration_seconds": 0.39,
+      "error": null,
+      "notes": "Each stage fires its own rule. The 'gap' here is that no single incident is raised for the full intrusion — they are correlated only by sharing source/dest IPs, not by temporal sequence. The correlation logic in app.services.ingestion.correlate_finding does group findings by (type, source, dest) within 24h, so port-scan findings will be grouped into one incident, web-attack into another, etc. Multi-stage correlation is a known roadmap item."
+    },
+    {
+      "id": "s23",
+      "title": "False positive: nightly backup to internal server",
+      "category": "false_positive",
+      "expected_findings": [],
+      "actual_findings": [
+        "Data Exfiltration"
+      ],
+      "matched": [],
+      "unexpected": [
+        "Data Exfiltration"
+      ],
+      "verdict": "false_positive",
+      "events_ingested": 1,
+      "duration_seconds": 0.078,
+      "error": null,
+      "notes": "EXPECTED: NO detection (this is legitimate traffic). NOTE: the current exfil rule DOES fire on this because it can't distinguish backups from exfiltration. Mitigation: trusted-destination allowlist (e.g. backup.company.local)."
+    },
+    {
+      "id": "s24",
+      "title": "False positive: vuln scan from approved scanner IP",
+      "category": "false_positive",
+      "expected_findings": [],
+      "actual_findings": [],
+      "matched": [],
+      "unexpected": [],
+      "verdict": "clean",
+      "events_ingested": 12,
+      "duration_seconds": 0.172,
+      "error": null,
+      "notes": "EXPECTED: NO detection. The ``approved_scanners: ['10.0.0.99']`` allowlist in the policy file should suppress port-scan findings from this IP. This is the only source-IP-based filter active in the rule engine."
+    },
+    {
+      "id": "s25",
+      "title": "False positive: streaming video to a known CDN",
+      "category": "false_positive",
+      "expected_findings": [],
+      "actual_findings": [
+        "Data Exfiltration",
+        "C2 Beaconing"
+      ],
+      "matched": [],
+      "unexpected": [
+        "Data Exfiltration",
+        "C2 Beaconing"
+      ],
+      "verdict": "false_positive",
+      "events_ingested": 8,
+      "duration_seconds": 0.109,
+      "error": null,
+      "notes": "EXPECTED: NO detection. NOTE: the exfil rule will fire on this (60MB+ in 300s to a public IP) because the rule has no concept of trusted CDN destinations. Mitigation: allowlist of known CDN IP ranges (Google, Cloudflare, Akamai, Fastly). For now the test will be marked as a 'missed false positive' — i.e. the rule fired when it shouldn't have. Adjust the assertion once the allowlist is added."
+    }
+  ]
+}
