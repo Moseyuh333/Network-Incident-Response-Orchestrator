@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlmodel import Session
 
 from app.db.session import engine, create_db_and_tables
+from app.models.incident import Incident
 from app.schemas.event import EventCreate
 from app.services.ingestion import ingest_event, process_events
 from sqlmodel import select
@@ -174,8 +175,22 @@ def main() -> None:
         incidents = process_events(session, events)
 
         if incidents:
-            for inc in incidents:
-                print(f"[+] Loaded scenario '{args.scenario}'. Created Incident: {inc.public_id} (ID: {inc.id})")
+            # `process_events` returns the same incident once per correlated finding.
+            # Deduplicate by incident id so the success message is printed once per scenario,
+            # and surface the total finding count so operators know correlation happened.
+            unique_by_id: dict[int, Incident] = {inc.id: inc for inc in incidents if inc.id is not None}
+            primary = next(iter(unique_by_id.values()))
+            extra = len(unique_by_id) - 1
+            if extra:
+                print(
+                    f"[+] Loaded scenario '{args.scenario}'. Created Incident: "
+                    f"{primary.public_id} (ID: {primary.id}) from {len(incidents)} correlated findings."
+                )
+            else:
+                print(
+                    f"[+] Loaded scenario '{args.scenario}'. Created Incident: "
+                    f"{primary.public_id} (ID: {primary.id})"
+                )
         else:
             # For false positive, events might be filtered, check if we need to force create or notify
             print(f"[+] Loaded scenario '{args.scenario}'. Ingested {len(events)} events. 0 incidents triggered (events likely filtered by policy).")
