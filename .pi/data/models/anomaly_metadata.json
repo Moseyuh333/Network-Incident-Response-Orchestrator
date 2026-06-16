@@ -1,0 +1,17 @@
+{
+  "version": "1.1.0",
+  "trained_at": "2026-06-16T16:30:04.727157",
+  "training_samples": 89,
+  "validation_samples": 23,
+  "features": [
+    "source_port",
+    "destination_port",
+    "bytes_in",
+    "bytes_out",
+    "protocol_num",
+    "src_private",
+    "dst_private",
+    "hour"
+  ],
+  "mean_validation_score": 0.0336
+}

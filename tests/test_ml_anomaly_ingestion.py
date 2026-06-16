@@ -41,13 +41,22 @@ def _force_heuristic_mode(monkeypatch):
     import sys
 
     detector_module = sys.modules["app.detection.anomaly_detector"]
+    ingestion_module = sys.modules["app.services.ingestion"]
 
-    original = detector_module.anomaly_detector
-    detector_module.anomaly_detector = detector_module.AnomalyDetector()
+    # Save every reference to the singleton we know about — both the one
+    # inside the detector module (the "true" home) and the alias that was
+    # captured at import time by ``app.services.ingestion``.
+    original_detector = detector_module.anomaly_detector
+    original_ingestion_ref = ingestion_module.anomaly_detector
+
+    fresh = detector_module.AnomalyDetector()
+    detector_module.anomaly_detector = fresh
+    ingestion_module.anomaly_detector = fresh
     try:
         yield
     finally:
-        detector_module.anomaly_detector = original
+        detector_module.anomaly_detector = original_detector
+        ingestion_module.anomaly_detector = original_ingestion_ref
         for path, data in saved.items():
             path.write_bytes(data)
 

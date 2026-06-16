@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, func, select
 
@@ -23,7 +23,7 @@ from app.schemas.event import BulkEventsRequest, EventCreate, EventResponse
 from app.core.config import settings
 from app.services.actions import approve_action, execute_action, propose_action, reject_action, rollback_action
 from app.services.agent_runs import run_agent_for_incident
-from app.core.paths import PI_DIR
+from app.core.paths import DATA_DIR, PI_DIR
 from app.services.ingestion import ingest_event, process_events
 from app.skills.registry import SkillRegistry
 
@@ -74,6 +74,72 @@ def import_zeek(payload: dict[str, str], session: Annotated[Session, Depends(get
     ]
     incidents = process_events(session, events)
     return {"ingested": len(events), "incidents": [incident.public_id for incident in incidents]}
+
+
+# PCAP upload size cap (defensive — never load unbounded files into memory)
+PCAP_MAX_BYTES = 50 * 1_048_576  # 50 MB
+
+
+@router.post("/events/import/pcap")
+async def import_pcap(
+    file: UploadFile = File(...),
+    session: Annotated[Session, Depends(get_session)] = None,  # type: ignore[assignment]
+) -> dict[str, Any]:
+    """Upload a PCAP/PCAPNG file and ingest the extracted events.
+
+    The endpoint caps the upload at ``PCAP_MAX_BYTES`` (50 MB by default) and
+    runs the pure-Python extractor shipped under
+    ``.pi/skills/pcap-flow-extraction/extract_flows.py``. We do not require
+    root or libpcap — the parser handles Ethernet/IPv4/IPv6/TCP/UDP/ICMP.
+    """
+    from app.skills.registry import run_skill  # local import to avoid cycles
+
+    blob = await file.read()
+    if len(blob) > PCAP_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"PCAP too large: {len(blob)} bytes (max {PCAP_MAX_BYTES})",
+        )
+    if len(blob) == 0:
+        raise HTTPException(status_code=400, detail="empty upload")
+
+    tmp = DATA_DIR / "incoming" / f"pcap-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.pcap"
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    tmp.write_bytes(blob)
+    try:
+        result = run_skill("pcap-flow-extraction", {"path": str(tmp)})
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+
+    flows = (result or {}).get("flows", [])
+    events: list = []
+    for flow in flows:
+        events.append(ingest_event(session, EventCreate(
+            external_event_id=f"pcap-{flow.get('flow_id', '')}",
+            timestamp=flow.get("start_time") or datetime.now(timezone.utc),
+            sensor="pcap-ingest",
+            source_type="pcap",
+            source_ip=flow.get("source_ip", ""),
+            destination_ip=flow.get("destination_ip", ""),
+            source_port=flow.get("source_port", 0),
+            destination_port=flow.get("destination_port", 0),
+            protocol=flow.get("protocol", "TCP"),
+            event_type="pcap",
+            action="observed",
+            bytes_in=flow.get("backward_bytes", 0),
+            bytes_out=flow.get("forward_bytes", 0),
+            severity="low",
+        )))
+    incidents = process_events(session, events)
+    return {
+        "ingested": len(events),
+        "flows": len(flows),
+        "incidents": [incident.public_id for incident in incidents],
+        "pcap_bytes": len(blob),
+    }
 
 
 @router.get("/events", response_model=list[EventResponse])

@@ -98,4 +98,145 @@ To test the system end-to-end, execute the following commands in another termina
    ```
    *Expected Output: Agent completes runs, outputs a Markdown report summary, and registers proposed IP block recommendations in the approvals queue.*
 
-For more details on other scenarios (Port Scan, C2 Beaconing, Data Exfiltration, and suppression), see [Demo Scenarios Guide](file:///d:/New%20folder/Network-Incident-Response-Orchestrator/docs/demo-guide.md).
+## 7.5 Pi Coding Agent Integration
+
+N.I.R.O. is designed to run under the [Pi Coding Agent](https://github.com/microsoft/pi-coding-agent) runtime
+(`@earendil-works/pi-coding-agent`). Pi is the canonical agent harness — it loads
+`.pi/agents/`, `.pi/prompts/`, `.pi/skills/`, `.pi/extensions/`, and `.pi/chains/`
+and orchestrates the tool-calling loop.
+
+### Install Pi
+
+```bash
+# Pi is published as an npm workspace dependency (already wired in package.json).
+cd <project>
+npm install
+```
+
+Pi is invoked via the workspace script. To run a Pi session against the
+incident-response chain:
+
+```bash
+npx pi run --skill incident-response-chain --alert data/sample_alert.json
+```
+
+### Pi settings (`.pi/settings.json`)
+
+The runtime reads the following settings. Create the file if it is
+absent — Pi falls back to environment variables in that case.
+
+```json
+{
+  "llm": {
+    "provider": "google",
+    "model": "gemini-2.5-flash",
+    "apiKeyEnv": "LLM_API_KEY"
+  },
+  "maxIterations": 8,
+  "maxToolCalls": 15,
+  "toolTimeoutSeconds": 30,
+  "outputTruncation": 4096
+}
+```
+
+### Skill / extension loading
+
+Pi auto-loads every directory under `.pi/skills/` and `.pi/extensions/`.
+A resource is "active" only if its `SKILL.md` / `index.ts` validates. Run
+the validators to see the active set:
+
+```bash
+python scripts/validate_pi_resources.py
+python scripts/validate_chains.py
+```
+
+### Fallback when Pi is unavailable
+
+If Pi is not installed in the environment (e.g. a CI runner without
+Node.js), N.I.R.O. still works end-to-end through the Python pipeline.
+The same `run_incident.py` CLI and `/api/analyze` endpoint are used in
+both modes; only the agent loop differs. Tests pass either way — see
+section 8 below.
+
+---
+
+## 7.6 LLM Configuration
+
+N.I.R.O. can use Google Gemini, Anthropic Claude, OpenAI, or local
+Ollama. The provider is selected via `LLM_PROVIDER` in `.env`.
+
+### Google Gemini (default)
+
+```bash
+LLM_PROVIDER=google
+LLM_MODEL=gemini-2.5-flash
+LLM_API_KEY=***    # or GOOGLE_API_KEY
+LLM_MAX_TOKENS=***
+LLM_TEMPERATURE=0.1
+```
+
+`gemini-2.5-flash` is the recommended default — fast, schema-aware, and
+cheap. `gemma-4-31b-it` is also available but slower on long prompts.
+
+### Offline mode (no LLM)
+
+Leave the API key empty. N.I.R.O. runs in fully-deterministic fallback:
+the rule engine + ML detector produce findings, and the agent emits a
+template-based analysis citing the rule evidence. To force this mode:
+
+```bash
+LLM_API_KEY=
+GOOGLE_API_KEY=
+```
+
+Or simply remove those lines from `.env`. The system runs every demo
+scenario with zero network calls.
+
+### Ollama (local)
+
+```bash
+LLM_PROVIDER=ollama
+LLM_MODEL=llama3.1:8b
+LLM_API_BASE=http://localhost:11434
+```
+
+Make sure `ollama serve` is running and the model is pulled:
+
+```bash
+ollama pull llama3.1:8b
+ollama serve
+```
+
+### Anthropic / OpenAI
+
+```bash
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-sonnet-4-20250514
+LLM_API_KEY=***
+```
+
+---
+
+## 7.7 Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `LLM provider not configured` | Empty key in `.env` | Set `LLM_API_KEY` (offline mode is OK too) |
+| `503 UNAVAILABLE` from Google | Quota exceeded or model overloaded | Switch to a different model, or wait and retry |
+| UI shows "no incidents" | DB is empty | Run `python scripts/load_demo.py --scenario ssh-bruteforce` |
+| `ModuleNotFoundError: pypdf` | Dev dep not installed | `pip install -e ".[dev]"` |
+| `tsc not found` in `validate_pi` | TypeScript not installed | `npm install` in project root |
+
+## 7.8 Known limitations
+
+- ML anomaly detector is unsupervised — it flags statistical outliers
+  but does not classify attack family. Combine with rule engine for
+  family labels.
+- LLM `gemma-4-31b-it` may return empty text on long structured-output
+  prompts. Use `gemini-2.5-flash` instead.
+- Free-tier Gemini API has 20 requests/day quota. The LLM integration
+  test suite (opt-in) costs ~6 requests per full run.
+- PCAP upload supports offline extraction; live capture is not
+  implemented in the default deployment.
+
+---
