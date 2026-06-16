@@ -403,7 +403,7 @@
           "id": "s99-01",
           "title": "Provider configured + probe",
           "passed": true,
-          "notes": "model=models/gemini-2.5-flash",
+          "notes": "model=models/gemini-2.5-flash-lite",
           "runtime": true
         },
         {
@@ -417,7 +417,7 @@
           "id": "s99-03",
           "title": "agent.analyze() returns structured output",
           "passed": true,
-          "notes": "available=True in 5.0s",
+          "notes": "available=True in 3.8s",
           "runtime": true
         },
         {
@@ -431,14 +431,14 @@
           "id": "s99-05",
           "title": "MITRE mapping present",
           "passed": true,
-          "notes": "1 technique(s)",
+          "notes": "5 technique(s)",
           "runtime": true
         },
         {
           "id": "s99-06",
           "title": "Recommended actions present",
           "passed": true,
-          "notes": "3 action(s)",
+          "notes": "4 action(s)",
           "runtime": true
         },
         {

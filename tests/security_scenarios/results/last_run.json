@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-06-16T15:55:56.194416+00:00",
-  "duration_seconds": 5.031,
+  "timestamp": "2026-06-16T17:16:50.072388+00:00",
+  "duration_seconds": 4.594,
   "summary": {
     "detected": 12,
     "partial": 4,
@@ -36,7 +36,7 @@
       ],
       "verdict": "detected",
       "events_ingested": 12,
-      "duration_seconds": 0.218,
+      "duration_seconds": 0.203,
       "error": null,
       "notes": "12 distinct destination ports from one source in a 60s window."
     },
@@ -100,7 +100,7 @@
       "unexpected": [],
       "verdict": "detected",
       "events_ingested": 1,
-      "duration_seconds": 0.032,
+      "duration_seconds": 0.031,
       "error": null,
       "notes": "Single 60MB outbound transfer to public IP, exceeds 50MB threshold."
     },
@@ -120,7 +120,7 @@
       "unexpected": [],
       "verdict": "detected",
       "events_ingested": 7,
-      "duration_seconds": 0.062,
+      "duration_seconds": 0.063,
       "error": null,
       "notes": "7 connections to the same host:port exactly 15s apart."
     },
@@ -140,7 +140,7 @@
       "unexpected": [],
       "verdict": "detected",
       "events_ingested": 150,
-      "duration_seconds": 1.219,
+      "duration_seconds": 1.125,
       "error": null,
       "notes": "150 events to one target in 60s, well above the 100 threshold."
     },
@@ -193,7 +193,7 @@
       "unexpected": [],
       "verdict": "detected",
       "events_ingested": 12,
-      "duration_seconds": 0.406,
+      "duration_seconds": 0.375,
       "error": null,
       "notes": "Compromised insider pivots across the internal network."
     },
@@ -221,7 +221,7 @@
       ],
       "verdict": "partial",
       "events_ingested": 12,
-      "duration_seconds": 0.297,
+      "duration_seconds": 0.25,
       "error": null,
       "notes": "GAP: port_scan_window_seconds=60. 12 ports over 60 minutes are far below the rolling window. Real attackers use this to evade. Mitigation would require a longer window or session-based aggregation."
     },
@@ -235,7 +235,7 @@
       "unexpected": [],
       "verdict": "known_gap",
       "events_ingested": 10,
-      "duration_seconds": 0.109,
+      "duration_seconds": 0.078,
       "error": null,
       "notes": "GAP: brute_force is per-source-IP with threshold=5. A botnet with 1 attempt per IP stays invisible. Mitigation requires aggregating across sources targeting the same destination+user."
     },
@@ -265,7 +265,7 @@
       ],
       "verdict": "partial",
       "events_ingested": 6,
-      "duration_seconds": 0.203,
+      "duration_seconds": 0.156,
       "error": null,
       "notes": "GAP: rule_engine.detect_brute_force only matches event_type in {ssh, auth, login, authentication}. RDP/WinRM/RPC are missing. Mitigation: extend the event_type whitelist to include 'rdp', 'winrm', 'rpc'."
     },
@@ -279,7 +279,7 @@
       "unexpected": [],
       "verdict": "known_gap",
       "events_ingested": 12,
-      "duration_seconds": 0.109,
+      "duration_seconds": 0.094,
       "error": null,
       "notes": "GAP: rule_engine jitter check is `jitter < 10.0 or jitter/avg < 0.2`. Real-world C2s (Cobalt Strike sleep-mask, Mythic) routinely use 30-50% jitter. This scenario uses ~40% jitter and so should NOT fire. Mitigation: switch to autocorrelation / FFT-based periodicity scoring."
     },
@@ -293,7 +293,7 @@
       "unexpected": [],
       "verdict": "known_gap",
       "events_ingested": 10,
-      "duration_seconds": 0.078,
+      "duration_seconds": 0.094,
       "error": null,
       "notes": "GAP: brute-force rule only triggers on failed logins. Credential stuffing with valid credentials is invisible. Mitigation: baseline per-user login rate and alert on impossible-travel / many-users-from-one-IP."
     },
@@ -311,7 +311,7 @@
       ],
       "verdict": "partial",
       "events_ingested": 30,
-      "duration_seconds": 0.266,
+      "duration_seconds": 0.296,
       "error": null,
       "notes": "GAP: exfil_window_seconds=300. 5MB every 5 minutes never reaches the 50MB threshold inside any single window. Real-world APT groups do exactly this. Mitigation: keep rolling counters per destination or switch to a rate-based detector (MB/hour)."
     },
@@ -345,7 +345,7 @@
       ],
       "verdict": "partial",
       "events_ingested": 12,
-      "duration_seconds": 0.156,
+      "duration_seconds": 0.187,
       "error": null,
       "notes": "GAP: same root cause as s14 (slow exfil). 5MB chunks over 6 minutes never aggregate above 50MB in the rolling window. ML could potentially flag this if it saw a per-flow aggregate, but it currently only examines one event at a time."
     },
@@ -374,7 +374,7 @@
       "unexpected": [],
       "verdict": "detected",
       "events_ingested": 10,
-      "duration_seconds": 0.344,
+      "duration_seconds": 0.297,
       "error": null,
       "notes": "Each connection to port 445 (blocked) fires a policy violation. The rule engine does NOT correlate 'same source hitting many internal hosts' as lateral movement — that's a known gap (no lateral-movement detector). We mark Policy Violation as the expected detection."
     },
@@ -395,7 +395,7 @@
       "unexpected": [],
       "verdict": "detected",
       "events_ingested": 2,
-      "duration_seconds": 0.046,
+      "duration_seconds": 0.063,
       "error": null,
       "notes": "URLs contain shell-metacharacter + command patterns which the web-attack regex detects. The rule does NOT know that the host has a webshell (would need a baseline of allowed URLs) but the URLs themselves look malicious so this should fire."
     },
@@ -409,7 +409,7 @@
       "unexpected": [],
       "verdict": "known_gap",
       "events_ingested": 2,
-      "duration_seconds": 0.032,
+      "duration_seconds": 0.031,
       "error": null,
       "notes": "GAP: web-attack regex doesn't have a phishing pattern. The URL is structurally innocent. Mitigation options: (1) domain reputation feed, (2) Levenshtein-distance check on lookalike domains, (3) URL allowlist for known-good login pages."
     },
@@ -429,7 +429,7 @@
       "unexpected": [],
       "verdict": "detected",
       "events_ingested": 8,
-      "duration_seconds": 0.125,
+      "duration_seconds": 0.109,
       "error": null,
       "notes": "Periodic 30s beacons to a stratum mining pool. Detected as C2 beaconing because the shape is identical. This is a true positive even though the C2 label is semantically wrong (it is a miner, not a C2). The rule doesn't distinguish; from the rule's perspective it's a periodic external connection."
     },
@@ -483,7 +483,7 @@
       ],
       "verdict": "detected",
       "events_ingested": 21,
-      "duration_seconds": 0.39,
+      "duration_seconds": 0.344,
       "error": null,
       "notes": "Each stage fires its own rule. The 'gap' here is that no single incident is raised for the full intrusion — they are correlated only by sharing source/dest IPs, not by temporal sequence. The correlation logic in app.services.ingestion.correlate_finding does group findings by (type, source, dest) within 24h, so port-scan findings will be grouped into one incident, web-attack into another, etc. Multi-stage correlation is a known roadmap item."
     },
@@ -501,7 +501,7 @@
       ],
       "verdict": "false_positive",
       "events_ingested": 1,
-      "duration_seconds": 0.078,
+      "duration_seconds": 0.031,
       "error": null,
       "notes": "EXPECTED: NO detection (this is legitimate traffic). NOTE: the current exfil rule DOES fire on this because it can't distinguish backups from exfiltration. Mitigation: trusted-destination allowlist (e.g. backup.company.local)."
     },
@@ -515,7 +515,7 @@
       "unexpected": [],
       "verdict": "clean",
       "events_ingested": 12,
-      "duration_seconds": 0.172,
+      "duration_seconds": 0.094,
       "error": null,
       "notes": "EXPECTED: NO detection. The ``approved_scanners: ['10.0.0.99']`` allowlist in the policy file should suppress port-scan findings from this IP. This is the only source-IP-based filter active in the rule engine."
     },
@@ -535,7 +535,7 @@
       ],
       "verdict": "false_positive",
       "events_ingested": 8,
-      "duration_seconds": 0.109,
+      "duration_seconds": 0.094,
       "error": null,
       "notes": "EXPECTED: NO detection. NOTE: the exfil rule will fire on this (60MB+ in 300s to a public IP) because the rule has no concept of trusted CDN destinations. Mitigation: allowlist of known CDN IP ranges (Google, Cloudflare, Akamai, Fastly). For now the test will be marked as a 'missed false positive' — i.e. the rule fired when it shouldn't have. Adjust the assertion once the allowlist is added."
     }

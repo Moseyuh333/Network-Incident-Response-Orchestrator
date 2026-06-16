@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-06-16T16:16:33.582919+00:00",
+  "timestamp": "2026-06-16T17:23:48.771280+00:00",
   "provider": "google-genai",
-  "model": "models/gemini-2.5-flash",
-  "passed": 0,
-  "total": 2,
+  "model": "models/gemini-2.5-flash-lite",
+  "passed": 5,
+  "total": 6,
   "results": [
     {
       "spec": {
@@ -31,20 +31,335 @@
         }
       },
       "analysis": {
-        "available": false,
-        "latency_seconds": 6.063,
+        "available": true,
+        "latency_seconds": 6.031,
         "provider": "google-genai",
-        "model": "models/gemini-2.5-flash",
-        "fallback_reason": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\\nPlease retry in 38.428288789s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'model': 'gemini-2.5-flash', 'location': 'global'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '38s'}]}}",
+        "model": "models/gemini-2.5-flash-lite",
+        "fallback_reason": null,
         "error": null,
-        "parsed": null,
-        "raw_text_preview": "{\"provider\": \"google-genai\", \"model\": \"models/gemini-2.5-flash\", \"fallback_reason\": \"429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\\\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\\\\nPlease retry in 38.428288789s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier",
-        "raw_text_len": 1707,
+        "parsed": {
+          "summary": "SSH brute force attempt detected against the 'root' account from IP 198.51.100.50.",
+          "incident_type": "Brute Force",
+          "severity": "high",
+          "confidence": 0.85,
+          "reasoning_summary": "The incident involves multiple failed login attempts (6) within a short timeframe (60 seconds) targeting a privileged account ('root') via SSH. This pattern is characteristic of a brute force attack.",
+          "mitre_mapping": [
+            {
+              "tactic": "Credential Access",
+              "technique": "Password Guessing",
+              "technique_id": "T1110"
+            }
+          ],
+          "recommended_actions": [
+            {
+              "action": "Temporarily block traffic from source IP 198.51.100.50 to destination IP 10.10.20.5 on port 22.",
+              "risk": "low",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Investigate the source IP 198.51.100.50 for any other malicious activity.",
+              "risk": "medium",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Review SSH logs for any successful logins from the source IP or other suspicious activity.",
+              "risk": "low",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Ensure strong password policies and consider implementing SSH key-based authentication for enhanced security.",
+              "risk": "low",
+              "requires_human_approval": false
+            }
+          ],
+          "report": "The incident is classified as a high-severity Brute Force attack with 85% confidence. The attack originated from IP address 198.51.100.50 and targeted the SSH service (port 22) on the internal host 10.10.20.5. Specifically, there were 6 failed login attempts within 60 seconds against the 'root' user account. This pattern strongly suggests a brute force attempt to gain unauthorized access. The MITRE ATT&CK mapping for this incident is T1110 (Password Guessing) under the Credential Access tactic. Recommended actions include temporarily blocking the source IP, investigating the source for further malicious activity, reviewing SSH logs for successful compromises, and enforcing stronger authentication measures like SSH keys."
+        },
+        "raw_text_preview": "{\"provider\": \"google-genai\", \"model\": \"models/gemini-2.5-flash-lite\", \"summary\": \"SSH brute force attempt detected against the 'root' account from IP 198.51.100.50.\", \"incident_type\": \"Brute Force\", \"severity\": \"high\", \"confidence\": 0.85, \"reasoning_summary\": \"The incident involves multiple failed login attempts (6) within a short timeframe (60 seconds) targeting a privileged account ('root') via SSH. This pattern is characteristic of a brute force attack.\", \"mitre_mapping\": [{\"tactic\": \"Credential Access\", \"technique\": \"Password Guessing\", \"technique_id\": \"T1110\"}], \"recommended_actions\": [{\"action\": \"Temporarily block traffic from source IP 198.51.100.50 to destination IP 10.10.20.5 on port 22.\", \"risk\": \"low\", \"requires_human_approval\": true}, {\"action\": \"Investigate the source IP 198.51.100.50 for any other malicious activity.\", \"risk\": \"medium\", \"requires_human_approval\": true}, {\"action\": \"Review SSH logs for any successful logins from the source IP or other suspicious activity.\"",
+        "raw_text_len": 1968,
+        "assertions": {}
+      },
+      "ok": true,
+      "notes": [
+        "Type: 'Brute Force' ✓",
+        "Confidence: 0.85 ✓",
+        "MITRE: T1110 ✓",
+        "Actions: Temporarily block traffic from source IP 198.51.100.50 to destination IP 10.10.20.5 on port 22., Investigate the source IP 198.51.100.50 for any other malicious activity., Review SSH logs for any successful logins from the source IP or other suspicious activity.... ✓",
+        "Latency: 6.0s ✓"
+      ]
+    },
+    {
+      "spec": {
+        "id": "s03",
+        "title": "SQL injection",
+        "expected_type": "Web Attack",
+        "evidence": {
+          "source_ip": "198.51.100.60",
+          "destination_ip": "10.10.20.10",
+          "destination_port": 80,
+          "severity": "high",
+          "confidence": 0.9,
+          "summary": "SQL injection attempt via /api/users?id=1%27%20UNION%20SELECT against web server 10.10.20.10.",
+          "evidence": [
+            "Suspicious URL: /api/users?id=1' UNION SELECT * FROM admin--",
+            "User-Agent: sqlmap/1.7",
+            "Matched patterns: SQL Injection (UNION/select)"
+          ]
+        },
+        "assertions": {
+          "expect_mitre": true,
+          "expect_actions": true,
+          "min_confidence": 0.5
+        }
+      },
+      "analysis": {
+        "available": true,
+        "latency_seconds": 3.266,
+        "provider": "google-genai",
+        "model": "models/gemini-2.5-flash-lite",
+        "fallback_reason": null,
+        "error": null,
+        "parsed": {
+          "summary": "SQL injection attempt detected targeting the web server at 10.10.20.10 from source IP 198.51.100.60. The attack utilized a UNION SELECT statement in the /api/users endpoint, indicative of an attempt to exfiltrate or manipulate data.",
+          "incident_type": "Web Attack",
+          "severity": "high",
+          "confidence": 0.9,
+          "reasoning_summary": "The incident was classified as a 'Web Attack' with 'high' severity and 0.9 confidence based on the provided evidence. The suspicious URL '/api/users?id=1%27%20UNION%20SELECT%20*%20FROM%20admin--' and the User-Agent 'sqlmap/1.7' strongly indicate a SQL injection attempt. The matched patterns confirm this assessment.",
+          "mitre_mapping": [
+            {
+              "tactic": "Initial Access",
+              "technique": "Exploit Public-Facing Application",
+              "technique_id": "T1190"
+            },
+            {
+              "tactic": "Execution",
+              "technique": "Command and Scripting Interpreter",
+              "technique_id": "T1059"
+            },
+            {
+              "tactic": "Defense Evasion",
+              "technique": "Bypass User Account Control",
+              "technique_id": "T1548"
+            },
+            {
+              "tactic": "Privilege Escalation",
+              "technique": "Exploitation for Privilege Escalation",
+              "technique_id": "T1068"
+            },
+            {
+              "tactic": "Impact",
+              "technique": "Data Manipulation",
+              "technique_id": "T1565"
+            }
+          ],
+          "recommended_actions": [
+            {
+              "action": "Block traffic from source IP 198.51.100.60 at the network firewall.",
+              "risk": "low",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Review web server logs for further indicators of compromise or successful exploitation.",
+              "risk": "low",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Analyze the affected web application for vulnerabilities that could be exploited by SQL injection.",
+              "risk": "medium",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Implement or strengthen input validation and parameterized queries in the web application to prevent future SQL injection attacks.",
+              "risk": "low",
+              "requires_human_approval": true
+            }
+          ],
+          "report": "The incident involved a detected SQL injection attempt from IP 198.51.100.60 targeting the web server at 10.10.20.10. The attack signature, including the specific URL pattern and User-Agent string, clearly points to a UNION SELECT SQL injection. This type of attack can lead to unauthorized data access, modification, or deletion. The severity is rated as high due to the potential impact on data integrity and confidentiality. Recommended actions include immediate blocking of the source IP, thorough log analysis, vulnerability assessment of the web application, and implementation of robust security measures like input validation and parameterized queries to prevent recurrence."
+        },
+        "raw_text_preview": "{\"provider\": \"google-genai\", \"model\": \"models/gemini-2.5-flash-lite\", \"summary\": \"SQL injection attempt detected targeting the web server at 10.10.20.10 from source IP 198.51.100.60. The attack utilized a UNION SELECT statement in the /api/users endpoint, indicative of an attempt to exfiltrate or manipulate data.\", \"incident_type\": \"Web Attack\", \"severity\": \"high\", \"confidence\": 0.9, \"reasoning_summary\": \"The incident was classified as a 'Web Attack' with 'high' severity and 0.9 confidence based on the provided evidence. The suspicious URL '/api/users?id=1%27%20UNION%20SELECT%20*%20FROM%20admin--' and the User-Agent 'sqlmap/1.7' strongly indicate a SQL injection attempt. The matched patterns confirm this assessment.\", \"mitre_mapping\": [{\"tactic\": \"Initial Access\", \"technique\": \"Exploit Public-Facing Application\", \"technique_id\": \"T1190\"}, {\"tactic\": \"Execution\", \"technique\": \"Command and Scripting Interpreter\", \"technique_id\": \"T1059\"}, {\"tactic\": \"Defense Evasion\", \"technique\": \"Bypas",
+        "raw_text_len": 2609,
+        "assertions": {}
+      },
+      "ok": true,
+      "notes": [
+        "Type: 'Web Attack' ✓",
+        "Confidence: 0.90 ✓",
+        "MITRE: T1190, T1059, T1548, T1068, T1565 ✓",
+        "Actions: Block traffic from source IP 198.51.100.60 at the network firewall., Review web server logs for further indicators of compromise or successful exploitation., Analyze the affected web application for vulnerabilities that could be exploited by SQL injection.... ✓",
+        "Latency: 3.3s ✓"
+      ]
+    },
+    {
+      "spec": {
+        "id": "s04",
+        "title": "Data exfiltration",
+        "expected_type": "Data Exfiltration",
+        "evidence": {
+          "source_ip": "10.10.20.22",
+          "destination_ip": "198.51.100.200",
+          "destination_port": 443,
+          "severity": "high",
+          "confidence": 0.8,
+          "summary": "60MB outbound transfer from internal host 10.10.20.22 to external IP 198.51.100.200 over HTTPS within 60 seconds.",
+          "evidence": [
+            "Total outbound: 60MB in 60s",
+            "Source: 10.10.20.22 (internal)",
+            "Destination: 198.51.100.200 (public)",
+            "Protocol: HTTPS/443"
+          ]
+        },
+        "assertions": {
+          "expect_mitre": true,
+          "expect_actions": true,
+          "min_confidence": 0.5
+        }
+      },
+      "analysis": {
+        "available": true,
+        "latency_seconds": 4.109,
+        "provider": "google-genai",
+        "model": "models/gemini-2.5-flash-lite",
+        "fallback_reason": null,
+        "error": null,
+        "parsed": {
+          "summary": "A large outbound transfer of 60MB was detected from internal IP 10.10.20.22 to external IP 198.51.100.200 over HTTPS within 60 seconds, indicating potential data exfiltration.",
+          "incident_type": "Data Exfiltration",
+          "severity": "high",
+          "confidence": 0.8,
+          "reasoning_summary": "The incident is classified as high severity due to the significant volume of data transferred outbound to an external IP address over a short period, which is a strong indicator of data exfiltration. The use of HTTPS on port 443 is common for legitimate traffic but can also be used to mask malicious activity.",
+          "mitre_mapping": [
+            {
+              "tactic": "Exfiltration",
+              "technique": "Exfiltration Over Alternative Protocol",
+              "technique_id": "T1048"
+            },
+            {
+              "tactic": "Exfiltration",
+              "technique": "Exfiltration Over Web Service",
+              "technique_id": "T1567"
+            }
+          ],
+          "recommended_actions": [
+            {
+              "action": "Isolate the source host 10.10.20.22 from the network to prevent further data exfiltration.",
+              "risk": "medium",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Investigate the source host 10.10.20.22 for any signs of compromise, malware, or unauthorized software.",
+              "risk": "low",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Analyze network traffic logs for the destination IP 198.51.100.200 to identify the nature of the transferred data and the receiving service.",
+              "risk": "low",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Block outbound connections to 198.51.100.200 at the firewall to prevent future exfiltration attempts to this specific IP.",
+              "risk": "medium",
+              "requires_human_approval": true
+            }
+          ],
+          "report": "The incident involves a large outbound data transfer from an internal host to an external IP address, strongly suggesting data exfiltration. Immediate containment actions should focus on isolating the affected host and investigating its integrity. Further analysis of network traffic and the host's activity is crucial to understand the scope and nature of the exfiltrated data."
+        },
+        "raw_text_preview": "{\"provider\": \"google-genai\", \"model\": \"models/gemini-2.5-flash-lite\", \"summary\": \"A large outbound transfer of 60MB was detected from internal IP 10.10.20.22 to external IP 198.51.100.200 over HTTPS within 60 seconds, indicating potential data exfiltration.\", \"incident_type\": \"Data Exfiltration\", \"severity\": \"high\", \"confidence\": 0.8, \"reasoning_summary\": \"The incident is classified as high severity due to the significant volume of data transferred outbound to an external IP address over a short period, which is a strong indicator of data exfiltration. The use of HTTPS on port 443 is common for legitimate traffic but can also be used to mask malicious activity.\", \"mitre_mapping\": [{\"tactic\": \"Exfiltration\", \"technique\": \"Exfiltration Over Alternative Protocol\", \"technique_id\": \"T1048\"}, {\"tactic\": \"Exfiltration\", \"technique\": \"Exfiltration Over Web Service\", \"technique_id\": \"T1567\"}], \"recommended_actions\": [{\"action\": \"Isolate the source host 10.10.20.22 from the network to prevent fu",
+        "raw_text_len": 2030,
+        "assertions": {}
+      },
+      "ok": true,
+      "notes": [
+        "Type: 'Data Exfiltration' ✓",
+        "Confidence: 0.80 ✓",
+        "MITRE: T1048, T1567 ✓",
+        "Actions: Isolate the source host 10.10.20.22 from the network to prevent further data exfiltration., Investigate the source host 10.10.20.22 for any signs of compromise, malware, or unauthorized software., Analyze network traffic logs for the destination IP 198.51.100.200 to identify the nature of the transferred data and the receiving service.... ✓",
+        "Latency: 4.1s ✓"
+      ]
+    },
+    {
+      "spec": {
+        "id": "s05",
+        "title": "C2 beaconing",
+        "expected_type": "C2 Beaconing",
+        "evidence": {
+          "source_ip": "10.10.20.30",
+          "destination_ip": "198.51.100.210",
+          "destination_port": 443,
+          "severity": "high",
+          "confidence": 0.9,
+          "summary": "7 periodic HTTPS connections from 10.10.20.30 to 198.51.100.210 every 15 seconds with low jitter.",
+          "evidence": [
+            "Connection count: 7",
+            "Average interval: 15.0s",
+            "Jitter: 0.0s",
+            "User-Agent: CobaltStrike beacon"
+          ]
+        },
+        "assertions": {
+          "expect_mitre": true,
+          "expect_actions": true,
+          "min_confidence": 0.5
+        }
+      },
+      "analysis": {
+        "available": true,
+        "latency_seconds": 3.844,
+        "provider": "google-genai",
+        "model": "models/gemini-2.5-flash-lite",
+        "fallback_reason": null,
+        "error": null,
+        "parsed": {
+          "summary": "C2 Beaconing detected from 10.10.20.30 to 198.51.100.210 on port 443.",
+          "incident_type": "Command and Control",
+          "severity": "high",
+          "confidence": 0.9,
+          "reasoning_summary": "The incident involves periodic HTTPS connections with low jitter, consistent with C2 beaconing behavior. The User-Agent string 'CobaltStrike beacon' further confirms this assessment.",
+          "mitre_mapping": [
+            {
+              "tactic": "Command and Control",
+              "technique": "Application Layer Protocol",
+              "technique_id": "T1071"
+            },
+            {
+              "tactic": "Command and Control",
+              "technique": "Web Protocols",
+              "technique_id": "T1102"
+            },
+            {
+              "tactic": "Command and Control",
+              "technique": "Non-Application Layer Protocol",
+              "technique_id": "T1095"
+            }
+          ],
+          "recommended_actions": [
+            {
+              "action": "Isolate the host 10.10.20.30 from the network to prevent further C2 communication and potential lateral movement.",
+              "risk": "medium",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Block the destination IP address 198.51.100.210 at the network perimeter firewall.",
+              "risk": "low",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Perform a full forensic analysis on the host 10.10.20.30 to identify the CobaltStrike implant and any other malicious activity.",
+              "risk": "medium",
+              "requires_human_approval": true
+            }
+          ],
+          "report": "The incident involves a C2 beaconing pattern detected from internal IP 10.10.20.30 to external IP 198.51.100.210. Seven periodic HTTPS connections were observed every 15 seconds with no discernible jitter. The User-Agent string 'CobaltStrike beacon' strongly indicates the use of Cobalt Strike for command and control. This is classified as a high-severity Command and Control incident with 0.9 confidence. Recommended actions include isolating the affected host, blocking the C2 server IP, and conducting a forensic analysis of the compromised host."
+        },
+        "raw_text_preview": "{\"provider\": \"google-genai\", \"model\": \"models/gemini-2.5-flash-lite\", \"summary\": \"C2 Beaconing detected from 10.10.20.30 to 198.51.100.210 on port 443.\", \"incident_type\": \"Command and Control\", \"severity\": \"high\", \"confidence\": 0.9, \"reasoning_summary\": \"The incident involves periodic HTTPS connections with low jitter, consistent with C2 beaconing behavior. The User-Agent string 'CobaltStrike beacon' further confirms this assessment.\", \"mitre_mapping\": [{\"tactic\": \"Command and Control\", \"technique\": \"Application Layer Protocol\", \"technique_id\": \"T1071\"}, {\"tactic\": \"Command and Control\", \"technique\": \"Web Protocols\", \"technique_id\": \"T1102\"}, {\"tactic\": \"Command and Control\", \"technique\": \"Non-Application Layer Protocol\", \"technique_id\": \"T1095\"}], \"recommended_actions\": [{\"action\": \"Isolate the host 10.10.20.30 from the network to prevent further C2 communication and potential lateral movement.\", \"risk\": \"medium\", \"requires_human_approval\": true}, {\"action\": \"Block the destination IP ",
+        "raw_text_len": 1867,
         "assertions": {}
       },
       "ok": false,
       "notes": [
-        "LLM unavailable: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\\nPlease retry in 38.428288789s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'model': 'gemini-2.5-flash', 'location': 'global'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '38s'}]}}"
+        "Type mismatch: LLM said 'Command and Control', expected 'C2 Beaconing'",
+        "Confidence: 0.90 ✓",
+        "MITRE: T1071, T1102, T1095 ✓",
+        "Actions: Isolate the host 10.10.20.30 from the network to prevent further C2 communication and potential lateral movement., Block the destination IP address 198.51.100.210 at the network perimeter firewall., Perform a full forensic analysis on the host 10.10.20.30 to identify the CobaltStrike implant and any other malicious activity. ✓",
+        "Latency: 3.8s ✓"
       ]
     },
     {
@@ -72,20 +387,167 @@
         }
       },
       "analysis": {
-        "available": false,
-        "latency_seconds": 4.0,
+        "available": true,
+        "latency_seconds": 4.125,
         "provider": "google-genai",
-        "model": "models/gemini-2.5-flash",
-        "fallback_reason": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\\nPlease retry in 34.426097502s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'location': 'global', 'model': 'gemini-2.5-flash'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '34s'}]}}",
+        "model": "models/gemini-2.5-flash-lite",
+        "fallback_reason": null,
         "error": null,
-        "parsed": null,
-        "raw_text_preview": "{\"provider\": \"google-genai\", \"model\": \"models/gemini-2.5-flash\", \"fallback_reason\": \"429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\\\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\\\\nPlease retry in 34.426097502s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier",
-        "raw_text_len": 1716,
+        "parsed": {
+          "summary": "Webshell command execution detected on /uploads/shell.php. The attacker used the 'cmd' parameter to execute commands like ';id' and '|whoami', indicating potential remote code execution.",
+          "incident_type": "Web Attack",
+          "severity": "critical",
+          "confidence": 0.95,
+          "reasoning_summary": "The presence of webshell patterns in the URL, specifically the execution of system commands like 'id' and 'whoami' via the 'cmd' parameter on '/uploads/shell.php', strongly indicates a successful web attack leading to remote code execution.",
+          "mitre_mapping": [
+            {
+              "tactic": "Execution",
+              "technique": "Command and Scripting Interpreter",
+              "technique_id": "T1059"
+            },
+            {
+              "tactic": "Execution",
+              "technique": "Web Shell",
+              "technique_id": "T1505"
+            }
+          ],
+          "recommended_actions": [
+            {
+              "action": "Isolate the affected server (10.10.20.50) from the network to prevent further compromise or lateral movement.",
+              "risk": "high",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Block the source IP address (198.51.100.99) at the network perimeter firewall.",
+              "risk": "medium",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Analyze the web server logs for other suspicious activity originating from or targeting the affected server.",
+              "risk": "low",
+              "requires_human_approval": false
+            },
+            {
+              "action": "Review the '/uploads/' directory for any other suspicious files and consider removing the detected webshell.",
+              "risk": "medium",
+              "requires_human_approval": true
+            }
+          ],
+          "report": "Webshell command execution detected on /uploads/shell.php. The attacker used the 'cmd' parameter to execute commands like ';id' and '|whoami', indicating potential remote code execution. The source IP is 198.51.100.99 and the destination is 10.10.20.50 on port 80. MITRE ATT&CK T1059 (Command and Scripting Interpreter) and T1505 (Web Shell) are relevant. Recommended actions include isolating the server, blocking the source IP, analyzing logs, and reviewing the uploads directory."
+        },
+        "raw_text_preview": "{\"provider\": \"google-genai\", \"model\": \"models/gemini-2.5-flash-lite\", \"summary\": \"Webshell command execution detected on /uploads/shell.php. The attacker used the 'cmd' parameter to execute commands like ';id' and '|whoami', indicating potential remote code execution.\", \"incident_type\": \"Web Attack\", \"severity\": \"critical\", \"confidence\": 0.95, \"reasoning_summary\": \"The presence of webshell patterns in the URL, specifically the execution of system commands like 'id' and 'whoami' via the 'cmd' parameter on '/uploads/shell.php', strongly indicates a successful web attack leading to remote code execution.\", \"mitre_mapping\": [{\"tactic\": \"Execution\", \"technique\": \"Command and Scripting Interpreter\", \"technique_id\": \"T1059\"}, {\"tactic\": \"Execution\", \"technique\": \"Web Shell\", \"technique_id\": \"T1505\"}], \"recommended_actions\": [{\"action\": \"Isolate the affected server (10.10.20.50) from the network to prevent further compromise or lateral movement.\", \"risk\": \"high\", \"requires_human_approval\": tru",
+        "raw_text_len": 1993,
         "assertions": {}
       },
-      "ok": false,
+      "ok": true,
       "notes": [
-        "LLM unavailable: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\\nPlease retry in 34.426097502s.', 'status': 'RESOURCE_EXHAUSTED', 'details': [{'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Learn more about Gemini API quotas', 'url': 'https://ai.google.dev/gemini-api/docs/rate-limits'}]}, {'@type': 'type.googleapis.com/google.rpc.QuotaFailure', 'violations': [{'quotaMetric': 'generativelanguage.googleapis.com/generate_content_free_tier_requests', 'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', 'quotaDimensions': {'location': 'global', 'model': 'gemini-2.5-flash'}, 'quotaValue': '20'}]}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '34s'}]}}"
+        "Type: 'Web Attack' ✓",
+        "Confidence: 0.95 ✓",
+        "MITRE: T1059, T1505 ✓",
+        "Actions: Isolate the affected server (10.10.20.50) from the network to prevent further compromise or lateral movement., Block the source IP address (198.51.100.99) at the network perimeter firewall., Analyze the web server logs for other suspicious activity originating from or targeting the affected server.... ✓",
+        "Latency: 4.1s ✓"
+      ]
+    },
+    {
+      "spec": {
+        "id": "s22",
+        "title": "Multi-stage attack (full intrusion)",
+        "expected_type": "Web Attack",
+        "evidence": {
+          "source_ip": "198.51.100.123",
+          "destination_ip": "10.10.20.100",
+          "destination_port": 443,
+          "severity": "critical",
+          "confidence": 0.95,
+          "summary": "Multi-stage intrusion observed: external port scan (12 ports in 60s), SQL injection at /api/users, 80MB outbound exfil to 198.51.100.220, and 7 C2 beacons to same host. Stages: Recon → Initial Access → Exfiltration → C2.",
+          "evidence": [
+            "Stage 1: Port scan 12 distinct ports",
+            "Stage 2: SQL injection via UNION SELECT",
+            "Stage 3: 80MB outbound to 198.51.100.220",
+            "Stage 4: 7 C2 beacons every 30s"
+          ]
+        },
+        "assertions": {
+          "expect_mitre": true,
+          "expect_actions": true,
+          "min_confidence": 0.7
+        }
+      },
+      "analysis": {
+        "available": true,
+        "latency_seconds": 4.937,
+        "provider": "google-genai",
+        "model": "models/gemini-2.5-flash-lite",
+        "fallback_reason": null,
+        "error": null,
+        "parsed": {
+          "summary": "A critical web attack was detected, involving a multi-stage intrusion. The attack began with a port scan, followed by SQL injection, significant data exfiltration, and subsequent command and control (C2) beaconing.",
+          "incident_type": "Web Attack",
+          "severity": "critical",
+          "confidence": 0.95,
+          "reasoning_summary": "The incident is classified as a critical web attack due to the observed sequence of malicious activities: initial reconnaissance (port scan), exploitation (SQL injection), data exfiltration, and C2 communication. The multi-stage nature and exfiltration indicate a high-impact compromise.",
+          "mitre_mapping": [
+            {
+              "tactic": "Reconnaissance",
+              "technique": "Network Service Scanning",
+              "technique_id": "T1046"
+            },
+            {
+              "tactic": "Initial Access",
+              "technique": "Exploit Public-Facing Application",
+              "technique_id": "T1190"
+            },
+            {
+              "tactic": "Exfiltration",
+              "technique": "Exfiltration Over Alternative Protocol",
+              "technique_id": "T1048"
+            },
+            {
+              "tactic": "Command and Control",
+              "technique": "Application Layer Protocol",
+              "technique_id": "T1071"
+            }
+          ],
+          "recommended_actions": [
+            {
+              "action": "Block the source IP address 198.51.100.123 at the network perimeter firewall.",
+              "risk": "low",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Isolate the affected internal host 10.10.20.100 from the network to prevent further lateral movement or data loss.",
+              "risk": "medium",
+              "requires_human_approval": true
+            },
+            {
+              "action": "Analyze the web server logs for detailed information about the SQL injection and exfiltration.",
+              "risk": "low",
+              "requires_human_approval": false
+            },
+            {
+              "action": "Perform a full vulnerability scan on the affected web server and related infrastructure.",
+              "risk": "low",
+              "requires_human_approval": false
+            },
+            {
+              "action": "Review firewall and proxy logs for any other suspicious outbound connections from 10.10.20.100.",
+              "risk": "low",
+              "requires_human_approval": false
+            }
+          ],
+          "report": "The incident involved a critical web attack originating from IP 198.51.100.123 targeting 10.10.20.100 on port 443. The attack progressed through multiple stages: reconnaissance via port scanning, exploitation through SQL injection, significant data exfiltration (80MB) to 198.51.100.220, and subsequent command and control (C2) communication with 7 beacons. The confidence in this assessment is high (0.95) due to the clear evidence of each stage. Recommended actions include blocking the source IP, isolating the compromised host, and conducting further log analysis and vulnerability assessments."
+        },
+        "raw_text_preview": "{\"provider\": \"google-genai\", \"model\": \"models/gemini-2.5-flash-lite\", \"summary\": \"A critical web attack was detected, involving a multi-stage intrusion. The attack began with a port scan, followed by SQL injection, significant data exfiltration, and subsequent command and control (C2) beaconing.\", \"incident_type\": \"Web Attack\", \"severity\": \"critical\", \"confidence\": 0.95, \"reasoning_summary\": \"The incident is classified as a critical web attack due to the observed sequence of malicious activities: initial reconnaissance (port scan), exploitation (SQL injection), data exfiltration, and C2 communication. The multi-stage nature and exfiltration indicate a high-impact compromise.\", \"mitre_mapping\": [{\"tactic\": \"Reconnaissance\", \"technique\": \"Network Service Scanning\", \"technique_id\": \"T1046\"}, {\"tactic\": \"Initial Access\", \"technique\": \"Exploit Public-Facing Application\", \"technique_id\": \"T1190\"}, {\"tactic\": \"Exfiltration\", \"technique\": \"Exfiltration Over Alternative Protocol\", \"technique_id",
+        "raw_text_len": 2547,
+        "assertions": {}
+      },
+      "ok": true,
+      "notes": [
+        "Type: 'Web Attack' ✓",
+        "Confidence: 0.95 ✓",
+        "MITRE: T1046, T1190, T1048, T1071 ✓",
+        "Actions: Block the source IP address 198.51.100.123 at the network perimeter firewall., Isolate the affected internal host 10.10.20.100 from the network to prevent further lateral movement or data loss., Analyze the web server logs for detailed information about the SQL injection and exfiltration.... ✓",
+        "Latency: 4.9s ✓"
       ]
     }
   ]
