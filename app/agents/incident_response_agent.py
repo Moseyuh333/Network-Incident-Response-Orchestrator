@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.llm.providers import GoogleGenAIProvider
+from app.llm.providers import get_provider
 from app.schemas.incident import LLMOutputSchema
 
 
@@ -18,10 +18,12 @@ class IncidentResponseAgent:
     def __init__(
         self,
         pi_dir: Path,
-        provider: GoogleGenAIProvider | None = None,
+        provider: Any = None,
     ) -> None:
         self.pi_dir = pi_dir
-        self.provider = provider or GoogleGenAIProvider()
+        # Use the factory so the configured provider (Google or
+        # TokenRouter) is selected based on LLM_PROVIDER in .env.
+        self.provider = provider or get_provider()
 
     def analyze(self, context: dict[str, Any]) -> dict[str, Any]:
         """Return normalized LLM analysis for a pipeline context."""

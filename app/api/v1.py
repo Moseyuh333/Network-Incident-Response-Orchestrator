@@ -863,8 +863,8 @@ def generate_pi_resource(payload: dict[str, str]) -> dict[str, Any]:
 
     safe_name = _safe_resource_name(name)
 
-    from app.llm.providers import GoogleGenAIProvider
-    provider = GoogleGenAIProvider()
+    from app.llm.providers import get_provider
+    provider = get_provider()
     if not provider.is_configured:
         raise HTTPException(status_code=400, detail="LLM provider is not configured. Please set the API key in Settings.")
 
