@@ -3,11 +3,28 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from app.schemas.event import EventCreate
+
+
+def _event_id(record: dict[str, Any]) -> str:
+    """Build a stable external_event_id for a Suricata record.
+
+    Suricata EVE records do not always carry a unique id (``event_id``
+    is optional, ``flow_id`` is per-flow not per-event). Falling back
+    to a UUID ensures the events.external_event_id UNIQUE constraint
+    is never violated by two events from the same PCAP / EVE file.
+    """
+    for key in ("event_id", "flow_id"):
+        value = record.get(key)
+        if value not in (None, ""):
+            ts = record.get("timestamp", "")
+            return f"suricata-{ts}-{value}"
+    return f"suricata-{uuid.uuid4().hex[:16]}"
 
 
 def parse_eve_file(path: Path) -> list[EventCreate]:
@@ -26,7 +43,7 @@ def parse_eve_record(record: dict[str, Any]) -> EventCreate:
     http = record.get("http") or {}
     dns = record.get("dns") or {}
     return EventCreate(
-        external_event_id=str(record.get("event_id") or record.get("flow_id") or ""),
+        external_event_id=_event_id(record),
         timestamp=_parse_ts(record.get("timestamp")),
         sensor=record.get("sensor_name") or "suricata",
         source_type="suricata",

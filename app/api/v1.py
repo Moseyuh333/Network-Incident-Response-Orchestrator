@@ -4,9 +4,23 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Any
+
+# Load CAPTURE_ALLOW_ANY_PATH (and similar) from .env so the API can
+# read it at request-time even though pydantic-settings only loads
+# the .env once at module import.
+try:
+    from dotenv import dotenv_values as _dotenv_values
+    _ENV_FILE_VALUES = _dotenv_values(".env")
+    for _k, _v in _ENV_FILE_VALUES.items():
+        if _k not in os.environ and _v is not None:
+            os.environ[_k] = _v
+    del _k, _v, _dotenv_values, _ENV_FILE_VALUES
+except ImportError:
+    pass
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
@@ -92,8 +106,6 @@ async def import_pcap(
     ``.pi/skills/pcap-flow-extraction/extract_flows.py``. We do not require
     root or libpcap — the parser handles Ethernet/IPv4/IPv6/TCP/UDP/ICMP.
     """
-    from app.skills.registry import run_skill  # local import to avoid cycles
-
     blob = await file.read()
     if len(blob) > PCAP_MAX_BYTES:
         raise HTTPException(
@@ -102,43 +114,169 @@ async def import_pcap(
         )
     if len(blob) == 0:
         raise HTTPException(status_code=400, detail="empty upload")
+    from app.skills import pcap_runner  # local import to avoid cycles
+    return pcap_runner.ingest_pcap_bytes(session, blob)
 
-    tmp = DATA_DIR / "incoming" / f"pcap-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.pcap"
-    tmp.parent.mkdir(parents=True, exist_ok=True)
-    tmp.write_bytes(blob)
-    try:
-        result = run_skill("pcap-flow-extraction", {"path": str(tmp)})
-    finally:
+
+@router.post("/events/import/pcap-path")
+def import_pcap_by_path(
+    payload: dict[str, Any],
+    session: Annotated[Session, Depends(get_session)],
+) -> dict[str, Any]:
+    """Ingest a PCAP file already present on the server's filesystem.
+
+    Operators who capture traffic with tcpdump / Wireshark on the host
+    and want to analyse it do not need to re-upload it. They can pass
+    the absolute path in the JSON body:
+
+        POST /api/v1/events/import/pcap-path
+        {"path": "/captures/2026-06-17-attack.pcap"}
+
+    The endpoint enforces ``PCAP_MAX_BYTES`` (50 MB) and rejects
+    paths that escape the captured-traffic allowlist
+    ``DATA_DIR/incoming/`` or the operator's home directory. To
+    accept a custom path, set ``CAPTURE_ALLOW_ANY_PATH=1`` in .env.
+    """
+    raw_path = (payload.get("path") or "").strip()
+    if not raw_path:
+        raise HTTPException(status_code=400, detail="path is required")
+
+    src = Path(raw_path).expanduser().resolve()
+    if not src.exists():
+        raise HTTPException(status_code=404, detail=f"file not found: {raw_path}")
+    if not src.is_file():
+        raise HTTPException(status_code=400, detail=f"not a regular file: {raw_path}")
+
+    # Path safety: only allow files under DATA_DIR/incoming or under
+    # the operator's home directory unless explicitly bypassed.
+    allow_any = os.environ.get("CAPTURE_ALLOW_ANY_PATH", "").lower() in ("1", "true", "yes")
+    if not allow_any:
+        home = Path.home().resolve()
+        incoming = (DATA_DIR / "incoming").resolve()
+        allowed_roots = [home, incoming]
         try:
-            tmp.unlink()
-        except FileNotFoundError:
+            src.relative_to(incoming)
+        except ValueError:
             pass
+        else:
+            return _ingest_pcap_file(session, src)
+        for root in allowed_roots:
+            try:
+                src.relative_to(root)
+            except ValueError:
+                continue
+            else:
+                return _ingest_pcap_file(session, src)
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"path is outside the allowed roots. Either place the file under "
+                f"{incoming} or your home directory ({home}), or set "
+                f"CAPTURE_ALLOW_ANY_PATH=1 in .env."
+            ),
+        )
+    return _ingest_pcap_file(session, src)
 
-    flows = (result or {}).get("flows", [])
-    events: list = []
-    for flow in flows:
-        events.append(ingest_event(session, EventCreate(
-            external_event_id=f"pcap-{flow.get('flow_id', '')}",
-            timestamp=flow.get("start_time") or datetime.now(timezone.utc),
-            sensor="pcap-ingest",
-            source_type="pcap",
-            source_ip=flow.get("source_ip", ""),
-            destination_ip=flow.get("destination_ip", ""),
-            source_port=flow.get("source_port", 0),
-            destination_port=flow.get("destination_port", 0),
-            protocol=flow.get("protocol", "TCP"),
-            event_type="pcap",
-            action="observed",
-            bytes_in=flow.get("backward_bytes", 0),
-            bytes_out=flow.get("forward_bytes", 0),
-            severity="low",
-        )))
+
+def _ingest_pcap_file(session: Session, src: Path) -> dict[str, Any]:
+    """Common PCAP-ingest path shared by /pcap and /pcap-path."""
+    size = src.stat().st_size
+    if size > PCAP_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"PCAP too large: {size} bytes (max {PCAP_MAX_BYTES})",
+        )
+    if size == 0:
+        raise HTTPException(status_code=400, detail="empty file")
+
+    from app.skills import pcap_runner  # local import to avoid cycles
+    return pcap_runner.ingest_pcap_file(session, src)
+
+
+@router.post("/events/import/file")
+def import_file_by_path(
+    payload: dict[str, Any],
+    session: Annotated[Session, Depends(get_session)],
+) -> dict[str, Any]:
+    """Unified import-by-path: auto-detects PCAP / Suricata EVE / Zeek
+    JSON by file extension.
+
+        POST /api/v1/events/import/file
+        {"path": "/captures/traffic.pcap"}
+        {"path": "/var/log/suricata/eve.json"}
+        {"path": "/var/log/zeek/conn.log"}
+
+    The same per-format path safety rules as ``/pcap-path`` apply.
+    """
+    raw_path = (payload.get("path") or "").strip()
+    if not raw_path:
+        raise HTTPException(status_code=400, detail="path is required")
+    src = Path(raw_path).expanduser().resolve()
+    if not src.exists() or not src.is_file():
+        raise HTTPException(status_code=404, detail=f"file not found: {raw_path}")
+
+    suffix = src.suffix.lower()
+    if suffix in (".pcap", ".pcapng", ".cap"):
+        # PCAP files always go through the allowlist check (which is
+        # what /pcap-path does too) so a single config flag
+        # CAPTURE_ALLOW_ANY_PATH covers both endpoints.
+        return import_pcap_by_path(payload, session)
+    if suffix in (".json", ".log", ".tsv", ".eve"):
+        # Heuristic: try Suricata first, fall back to Zeek. The records
+        # are similar enough that one of them will accept the input.
+        # A future improvement is to sniff the first non-blank line.
+        first_line = ""
+        try:
+            with src.open("r", encoding="utf-8", errors="ignore") as fh:
+                for line in fh:
+                    if line.strip():
+                        first_line = line
+                        break
+        except OSError as exc:
+            raise HTTPException(status_code=400, detail=f"cannot read file: {exc}") from exc
+
+        # Zeek records start with "{" and contain "id.orig_h" / "ts" /
+        # "conn_state". Suricata EVE also starts with "{" but contains
+        # "event_type" / "src_ip". Disambiguate by key presence.
+        try:
+            sample = json.loads(first_line) if first_line else {}
+        except json.JSONDecodeError:
+            sample = {}
+        if "id.orig_h" in sample or "id.resp_h" in sample:
+            return _ingest_zeek_file(session, src, payload.get("log_type", "conn"))
+        return _ingest_suricata_file(session, src)
+    raise HTTPException(
+        status_code=415,
+        detail=(
+            f"unsupported file extension: {suffix!r}. Use .pcap / .pcapng "
+            f"for PCAP, .json / .log / .eve for Suricata EVE, or .log for Zeek."
+        ),
+    )
+
+
+def _ingest_zeek_file(
+    session: Session,
+    src: Path,
+    log_type: str = "conn",
+) -> dict[str, Any]:
+    events = [ingest_event(session, item) for item in parse_zeek_file(src, log_type)]
     incidents = process_events(session, events)
     return {
+        "format": "zeek",
         "ingested": len(events),
-        "flows": len(flows),
         "incidents": [incident.public_id for incident in incidents],
-        "pcap_bytes": len(blob),
+        "source": str(src),
+    }
+
+
+def _ingest_suricata_file(session: Session, src: Path) -> dict[str, Any]:
+    events = [ingest_event(session, item) for item in parse_eve_file(src)]
+    incidents = process_events(session, events)
+    return {
+        "format": "suricata",
+        "ingested": len(events),
+        "incidents": [incident.public_id for incident in incidents],
+        "source": str(src),
     }
 
 
