@@ -1,5 +1,0 @@
-{"ts":1718553600.123456,"uid":"Cabc123","id.orig_h":"192.168.1.50","id.orig_p":54321,"id.resp_h":"10.0.0.10","id.resp_p":22,"proto":"tcp","conn_state":"SF","orig_bytes":1024,"resp_bytes":2048}
-{"ts":1718553601.234567,"uid":"Cabc124","id.orig_h":"192.168.1.50","id.orig_p":54322,"id.resp_h":"10.0.0.10","id.resp_p":22,"proto":"tcp","conn_state":"REJ","orig_bytes":0,"resp_bytes":0}
-{"ts":1718553602.345678,"uid":"Cabc125","id.orig_h":"192.168.1.50","id.orig_p":54323,"id.resp_h":"10.0.0.10","id.resp_p":22,"proto":"tcp","conn_state":"REJ","orig_bytes":0,"resp_bytes":0}
-{"ts":1718553603.456789,"uid":"Cabc126","id.orig_h":"192.168.1.50","id.orig_p":54324,"id.resp_h":"10.0.0.10","id.resp_p":22,"proto":"tcp","conn_state":"REJ","orig_bytes":0,"resp_bytes":0}
-{"ts":1718553604.567890,"uid":"Cabc127","id.orig_h":"192.168.1.50","id.orig_p":54325,"id.resp_h":"10.0.0.10","id.resp_p":22,"proto":"tcp","conn_state":"SF","orig_bytes":512,"resp_bytes":1024}

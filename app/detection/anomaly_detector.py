@@ -18,6 +18,18 @@ SCALER_PATH = PI_DIR / "data" / "models" / "anomaly_scaler.pkl"
 METADATA_PATH = PI_DIR / "data" / "models" / "anomaly_metadata.json"
 
 
+def _is_private_ip(ip: str) -> bool:
+    """RFC1918 / loopback / link-local check.
+
+    Returns True for unparseable IPs so untrusted text never slips
+    past the heuristic path.
+    """
+    try:
+        return ipaddress.ip_address(ip).is_private
+    except ValueError:
+        return True
+
+
 class AnomalyDetector:
     """ML anomaly detector using IsolationForest and StandardScaler.
 
@@ -90,12 +102,12 @@ class AnomalyDetector:
             # Protocol number
             proto = str(e.get("protocol") or "").upper()
             proto_num = 6.0 if proto == "TCP" else (17.0 if proto == "UDP" else (1.0 if proto == "ICMP" else 0.0))
-            
-            # RFC1918 flags
+
+            # RFC1918 flags (use the shared helper to avoid duplication)
             src_ip = str(e.get("source_ip") or "")
             dst_ip = str(e.get("destination_ip") or "")
-            src_private = 1.0 if self._is_private(src_ip) else 0.0
-            dst_private = 1.0 if self._is_private(dst_ip) else 0.0
+            src_private = 1.0 if _is_private_ip(src_ip) else 0.0
+            dst_private = 1.0 if _is_private_ip(dst_ip) else 0.0
 
             # Hour of day
             ts = e.get("timestamp")
@@ -188,11 +200,10 @@ class AnomalyDetector:
         return findings
 
     @staticmethod
+    @staticmethod
     def _is_private(ip: str) -> bool:
-        try:
-            return ipaddress.ip_address(ip).is_private
-        except ValueError:
-            return True
+        """Deprecated: use module-level ``_is_private_ip`` instead."""
+        return _is_private_ip(ip)
 
     @staticmethod
     def _heuristic_scores(events: list[dict[str, Any]]) -> list[float]:

@@ -22,12 +22,6 @@ from app.db.session import create_db_and_tables
 client = TestClient(app)
 
 
-# ── Sample data ────────────────────────────────────────────────────────
-
-
-SAMPLE_DATA_DIR = Path(__file__).resolve().parent.parent / "sample_data"
-
-
 ZEEK_LINE = (
     '{"ts":1718553600.0,"uid":"Cabc123","id.orig_h":"192.168.1.50","id.orig_p":54321,'
     '"id.resp_h":"10.0.0.10","id.resp_p":22,"proto":"tcp","conn_state":"SF",'
@@ -176,7 +170,14 @@ def test_import_pcap_by_path_not_found() -> None:
 
 
 def test_import_pcap_by_path_outside_allowlist() -> None:
-    """Without CAPTURE_ALLOW_ANY_PATH, a file outside the allowlist is 403."""
+    """Without CAPTURE_ALLOW_ANY_PATH, a file outside the allowlist is 403.
+
+    Skipped when the env var is set, because operators can opt in to
+    unrestricted path access during testing or development.
+    """
+    import os
+    if os.environ.get("CAPTURE_ALLOW_ANY_PATH", "").lower() in ("1", "true", "yes"):
+        pytest.skip("CAPTURE_ALLOW_ANY_PATH is set; allowlist is bypassed")
     target = Path("C:/Windows/Temp/__niro_test_evil.pcap")
     if target.parent.exists():
         target.write_bytes(b"not really pcap")

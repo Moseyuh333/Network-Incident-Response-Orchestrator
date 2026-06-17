@@ -8,8 +8,12 @@ from app.llm.providers import GoogleGenAIProvider
 
 
 def test_config_resolves_google_model_from_env_style_override() -> None:
+    # ``_env_file=None`` disables .env loading but does NOT clear env
+    # vars. We must explicitly reset ``llm_model`` so the property does
+    # not short-circuit on a value inherited from the environment.
     config = Settings(
         llm_provider="google",
+        llm_model="",
         llm_model_google="gemma-4-31b",
         _env_file=None,
     )

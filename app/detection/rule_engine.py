@@ -101,10 +101,9 @@ def _load_policies() -> dict[str, Any]:
     return policy
 
 def _is_private(ip: str) -> bool:
-    try:
-        return ipaddress.ip_address(ip).is_private
-    except ValueError:
-        return any(ip.startswith(p) for p in _PRIVATE_NETWORKS)
+    """RFC1918 check (delegates to the shared helper)."""
+    from app.detection.anomaly_detector import _is_private_ip
+    return _is_private_ip(ip)
 
 
 
