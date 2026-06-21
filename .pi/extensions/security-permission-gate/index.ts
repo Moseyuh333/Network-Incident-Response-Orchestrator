@@ -40,3 +40,19 @@ export class SecurityPermissionGate {
     };
   }
 }
+
+export default function securityPermissionGateExtension(pi: any) {
+  const gate = new SecurityPermissionGate();
+  pi.registerCommand("niro-check-target", {
+    description: "Check a simulated containment action against protected assets: /niro-check-target <action> <target>",
+    handler: async (args: string, ctx: any) => {
+      const [action, target] = args.trim().split(/\s+/, 2);
+      if (!action || !target) {
+        ctx.ui.notify("Usage: /niro-check-target <action> <target>", "warning");
+        return;
+      }
+      const decision = gate.evaluate(action, target);
+      ctx.ui.notify(`${decision.allowed ? "ALLOWED" : "BLOCKED"}: ${decision.reason}`, decision.allowed ? "info" : "warning");
+    },
+  });
+}

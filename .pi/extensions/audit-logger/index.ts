@@ -35,3 +35,19 @@ export class AuditLogger {
     return copy;
   }
 }
+
+export default function auditLoggerExtension(pi: any) {
+  const logger = new AuditLogger();
+  pi.registerCommand("niro-audit", {
+    description: "Create a redacted in-memory N.I.R.O. audit entry: /niro-audit <event>",
+    handler: async (args: string, ctx: any) => {
+      const event = args.trim();
+      if (!event) {
+        ctx.ui.notify("Usage: /niro-audit <event>", "warning");
+        return;
+      }
+      const entry = logger.log("pi-session", event, { source: "pi-extension" });
+      ctx.ui.notify(`Audit entry created at ${entry.timestamp}`, "info");
+    },
+  });
+}

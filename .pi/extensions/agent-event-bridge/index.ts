@@ -25,3 +25,20 @@ export class AgentEventBridge {
     }
   }
 }
+
+export default function agentEventBridgeExtension(pi: any) {
+  const bridge = new AgentEventBridge();
+  pi.registerCommand("niro-emit-event", {
+    description: "Record a simulated N.I.R.O. agent event: /niro-emit-event <incident_id> <event_type>",
+    handler: async (args: string, ctx: any) => {
+      const [incidentText, eventType] = args.trim().split(/\s+/, 2);
+      const incidentId = Number(incidentText);
+      if (!Number.isInteger(incidentId) || incidentId < 1 || !eventType) {
+        ctx.ui.notify("Usage: /niro-emit-event <incident_id> <event_type>", "warning");
+        return;
+      }
+      const sent = await bridge.sendEvent(incidentId, eventType, "pi", { simulated: true });
+      ctx.ui.notify(sent ? `Event queued: ${eventType}` : "Unable to queue event", sent ? "info" : "error");
+    },
+  });
+}

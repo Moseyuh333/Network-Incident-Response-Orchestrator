@@ -29,3 +29,19 @@ export class ContextSafety {
     return `<UNTRUSTED_DATA_SOURCE source="${source}">\n${cleanData}\n</UNTRUSTED_DATA_SOURCE>`;
   }
 }
+
+export default function contextSafetyExtension(pi: any) {
+  const safety = new ContextSafety();
+  pi.registerCommand("niro-sanitize", {
+    description: "Sanitize untrusted incident text before it is used as agent context.",
+    handler: async (args: string, ctx: any) => {
+      const text = args.trim();
+      if (!text) {
+        ctx.ui.notify("Usage: /niro-sanitize <untrusted text>", "warning");
+        return;
+      }
+      const sanitized = safety.sanitizeLogData(text);
+      ctx.ui.notify(sanitized === text ? "Context is safe" : "Unsafe context was sanitized", sanitized === text ? "info" : "warning");
+    },
+  });
+}

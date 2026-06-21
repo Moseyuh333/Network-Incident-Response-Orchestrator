@@ -53,3 +53,19 @@ export class SecurityTools {
     return { success: true, data: { status: "healthy", timestamp: new Date().toISOString() } };
   }
 }
+
+export default function securityToolsExtension(pi: any) {
+  const tools = new SecurityTools();
+  pi.registerCommand("niro-incident", {
+    description: "Retrieve a simulated N.I.R.O. incident by ID: /niro-incident <incident_id>",
+    handler: async (args: string, ctx: any) => {
+      const incidentId = Number(args.trim());
+      if (!Number.isInteger(incidentId) || incidentId < 1) {
+        ctx.ui.notify("Usage: /niro-incident <incident_id>", "warning");
+        return;
+      }
+      const result = await tools.get_incident(incidentId);
+      ctx.ui.notify(result.success ? `Incident ${incidentId} retrieved` : (result.error || "Lookup failed"), result.success ? "info" : "error");
+    },
+  });
+}
