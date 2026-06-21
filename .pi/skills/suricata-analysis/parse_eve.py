@@ -7,8 +7,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from app.collectors.suricata import parse_eve_file
+from app.core.json import jsonable
 
 
 def main():
@@ -28,11 +30,19 @@ def main():
         # This would require incident-to-event mapping in production
         pass
 
+    # ``parse_eve_file`` returns a flat ``list[EventCreate]`` (one entry per
+    # EVE record). Group by ``event_type`` so the JSON output surfaces the
+    # distribution instead of dumping the whole list at the same level.
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for event in results:
+        event_type = getattr(event, "event_type", "unknown") or "unknown"
+        grouped.setdefault(event_type, []).append(jsonable(event))
+
     output = {
         "source": "suricata",
         "file": str(args.file),
-        "counts": {k: len(v) for k, v in results.items()},
-        "results": results
+        "counts": {k: len(v) for k, v in grouped.items()},
+        "results": grouped,
     }
 
     print(json.dumps(output, indent=2, default=str))
