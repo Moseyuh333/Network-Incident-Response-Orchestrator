@@ -1,0 +1,14 @@
+{
+  "id": "investigate-web-attack",
+  "name": "Investigate Web Attack",
+  "version": "1.0.0",
+  "description": "Investigate web attack findings using read-only incident, event, asset, MITRE, and report tools.",
+  "triggers": ["web attack", "sql injection", "path traversal", "xss"],
+  "allowed_tools": ["get_incident", "list_related_events", "list_findings", "list_actions", "propose_response_action"],
+  "input_schema": {"type": "object"},
+  "output_schema": {"type": "object"},
+  "max_tool_calls": 6,
+  "safety_classification": "read_only",
+  "instructions": "Use only internal evidence. Cite event and finding IDs. Propose containment actions instead of executing them.",
+  "enabled": true
+}

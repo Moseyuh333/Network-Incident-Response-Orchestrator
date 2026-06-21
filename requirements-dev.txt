@@ -1,0 +1,13 @@
+# Development / test extras (mirrors pyproject.toml ``[project.optional-dependencies].dev``).
+# Install alongside ``requirements.txt`` to run the test suite:
+#     pip install -r requirements.txt -r requirements-dev.txt
+#     python -m pytest
+pytest>=8.2.0
+pytest-asyncio>=0.23.0
+ruff>=0.5.0
+
+# ML anomaly detection is a separate extra in pyproject.toml:
+#     pip install -e .[ml]
+# Listed here for convenience when you want both at once.
+scikit-learn>=1.5.0
+numpy>=1.26.0

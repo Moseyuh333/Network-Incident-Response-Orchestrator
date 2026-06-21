@@ -1,8 +1,0 @@
-{
-  "alert_id": "ALERT-09-001",
-  "title": "Possible C2 beaconing and exfiltration",
-  "source_ip": "10.10.5.23",
-  "destination_ip": "203.0.113.77",
-  "timestamp": "2026-06-08T08:30:00+00:00",
-  "severity": "high"
-}

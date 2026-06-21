@@ -1,0 +1,13 @@
+name: live-event-chain
+description: Continuous live stream threat correlation.
+phases:
+  - phase: 0
+    name: ingest_stream
+    agent: intake-agent
+    skill: event-ingestion
+  - phase: 1
+    name: continuous_detection
+    concurrency: parallel
+    agents:
+      - name: rule-detection-agent
+      - name: ml-anomaly-agent

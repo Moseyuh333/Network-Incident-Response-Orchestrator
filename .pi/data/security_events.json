@@ -1,0 +1,17 @@
+{
+  "events": [
+    {"timestamp": "2026-06-05T15:19:01Z", "event_type": "web", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 50201, "destination_port": 80, "protocol": "HTTP", "action": "allowed", "url": "/login.php?id=1%27%20or%201=1", "user_agent": "curl/8.0", "bytes_in": 500, "bytes_out": 2048},
+    {"timestamp": "2026-06-05T15:19:03Z", "event_type": "web", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 50202, "destination_port": 80, "protocol": "HTTP", "action": "allowed", "url": "/download?file=../../../../etc/passwd", "user_agent": "curl/8.0", "bytes_in": 600, "bytes_out": 4096},
+    {"timestamp": "2026-06-05T15:19:10Z", "event_type": "firewall", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 51001, "destination_port": 21, "protocol": "TCP", "action": "denied", "bytes_in": 40, "bytes_out": 0},
+    {"timestamp": "2026-06-05T15:19:11Z", "event_type": "firewall", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 51002, "destination_port": 22, "protocol": "TCP", "action": "denied", "bytes_in": 40, "bytes_out": 0},
+    {"timestamp": "2026-06-05T15:19:12Z", "event_type": "firewall", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 51003, "destination_port": 23, "protocol": "TCP", "action": "denied", "bytes_in": 40, "bytes_out": 0},
+    {"timestamp": "2026-06-05T15:19:13Z", "event_type": "firewall", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 51004, "destination_port": 25, "protocol": "TCP", "action": "denied", "bytes_in": 40, "bytes_out": 0},
+    {"timestamp": "2026-06-05T15:19:14Z", "event_type": "firewall", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 51005, "destination_port": 53, "protocol": "TCP", "action": "denied", "bytes_in": 40, "bytes_out": 0},
+    {"timestamp": "2026-06-05T15:19:15Z", "event_type": "firewall", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 51006, "destination_port": 110, "protocol": "TCP", "action": "denied", "bytes_in": 40, "bytes_out": 0},
+    {"timestamp": "2026-06-05T15:19:16Z", "event_type": "firewall", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 51007, "destination_port": 139, "protocol": "TCP", "action": "denied", "bytes_in": 40, "bytes_out": 0},
+    {"timestamp": "2026-06-05T15:19:17Z", "event_type": "firewall", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 51008, "destination_port": 445, "protocol": "TCP", "action": "denied", "bytes_in": 40, "bytes_out": 0},
+    {"timestamp": "2026-06-05T15:19:18Z", "event_type": "firewall", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 51009, "destination_port": 1433, "protocol": "TCP", "action": "denied", "bytes_in": 40, "bytes_out": 0},
+    {"timestamp": "2026-06-05T15:19:19Z", "event_type": "firewall", "source_ip": "203.0.113.77", "destination_ip": "10.10.20.15", "source_port": 51010, "destination_port": 3389, "protocol": "TCP", "action": "denied", "bytes_in": 40, "bytes_out": 0},
+    {"timestamp": "2026-06-05T15:21:00Z", "event_type": "netflow", "source_ip": "10.10.20.15", "destination_ip": "198.51.100.44", "source_port": 44321, "destination_port": 443, "protocol": "HTTPS", "action": "allowed", "bytes_in": 10000, "bytes_out": 82400000}
+  ]
+}

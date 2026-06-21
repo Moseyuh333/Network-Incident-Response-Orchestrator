@@ -1,0 +1,16 @@
+{
+  "id": "simulation",
+  "version": "1.0.0",
+  "entrypoint": "simulation",
+  "description": "Lab-safe simulation plugin for reversible response actions.",
+  "tools": [
+    {"name": "simulate_block_ip", "risk_level": "medium", "approval_required": true, "reversible": true},
+    {"name": "simulate_quarantine_host", "risk_level": "high", "approval_required": true, "reversible": true},
+    {"name": "simulate_disable_user", "risk_level": "high", "approval_required": true, "reversible": true},
+    {"name": "simulate_notify_admin", "risk_level": "low", "approval_required": false, "reversible": false},
+    {"name": "simulate_rollback", "risk_level": "low", "approval_required": false, "reversible": true}
+  ],
+  "required_permissions": [],
+  "required_configuration": {},
+  "enabled": true
+}

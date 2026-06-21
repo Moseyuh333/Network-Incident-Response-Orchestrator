@@ -11,7 +11,10 @@ from pydantic import BaseModel, Field
 class EventCreate(BaseModel):
     """Schema for ingesting a single event."""
 
+    external_event_id: str | None = None
     timestamp: datetime | None = None
+    sensor: str | None = None
+    source_type: str | None = None
     source_ip: str = Field(..., description="Source IP address")
     destination_ip: str = Field(..., description="Destination IP address")
     source_port: int | None = None
@@ -21,6 +24,9 @@ class EventCreate(BaseModel):
     action: str | None = None
     username: str | None = None
     url: str | None = None
+    domain: str | None = None
+    flow_id: str | None = None
+    severity: str | None = None
     user_agent: str | None = None
     bytes_in: int = 0
     bytes_out: int = 0

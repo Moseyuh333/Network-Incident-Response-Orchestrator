@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import ipaddress
+import json
 import re
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
@@ -76,8 +79,32 @@ _PRIVATE_NETWORKS = (
 )
 
 
+def _load_policies() -> dict[str, Any]:
+    policy_dir = Path(__file__).resolve().parents[2] / ".pi" / "data" / "policies"
+    policy = {
+        "trusted_ips": ["127.0.0.1", "10.0.0.254"],
+        "trusted_cidrs": ["10.0.0.0/24"],
+        "approved_scanners": ["10.0.0.99"],
+        "suppressed_detectors": [],
+        "blocked_ports": [135, 139, 445, 1433, 3306, 3389, 5432, 5900, 6379, 9200]
+    }
+    if policy_dir.exists():
+        for f in policy_dir.glob("*.json"):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                for k in policy:
+                    if k in data:
+                        if isinstance(data[k], list):
+                            policy[k] = list(set(policy[k] + data[k]))
+            except Exception:
+                pass
+    return policy
+
 def _is_private(ip: str) -> bool:
-    return any(ip.startswith(p) for p in _PRIVATE_NETWORKS)
+    """RFC1918 check (delegates to the shared helper)."""
+    from app.detection.anomaly_detector import _is_private_ip
+    return _is_private_ip(ip)
+
 
 
 def _window(
@@ -252,53 +279,66 @@ def detect_data_exfiltration(events: list[dict[str, Any]]) -> list[dict[str, Any
 
 
 def detect_c2_beaconing(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Detect C2-like beaconing: periodic connections to same external host."""
+    """Detect C2-like beaconing: periodic connections to same external host grouped by conversation."""
     findings: list[dict[str, Any]] = []
-    by_dst: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    by_conv: dict[tuple[str, str, int, str], list[dict[str, Any]]] = defaultdict(list)
     for e in events:
+        src = e.get("source_ip")
         dst = e.get("destination_ip")
-        if dst and not _is_private(dst):
-            by_dst[dst].append(e)
+        port = e.get("destination_port") or 0
+        proto = e.get("protocol") or "TCP"
+        if src and dst and not _is_private(dst):
+            by_conv[(src, dst, port, proto)].append(e)
 
     min_interval = settings.beacon_interval_min
     max_interval = settings.beacon_interval_max
     repeat_count = settings.beacon_repeat_count
 
-    for dst_ip, dst_events in by_dst.items():
-        if len(dst_events) < repeat_count:
+    import math
+
+    for (src_ip, dst_ip, dst_port, protocol), conv_events in by_conv.items():
+        if len(conv_events) < repeat_count:
             continue
-        dst_events.sort(key=lambda e: e["timestamp"])
+        conv_events.sort(key=lambda e: e["timestamp"])
         intervals = []
-        for i in range(1, len(dst_events)):
-            delta = (dst_events[i]["timestamp"] - dst_events[i - 1]["timestamp"]).total_seconds()
+        for i in range(1, len(conv_events)):
+            delta = (conv_events[i]["timestamp"] - conv_events[i - 1]["timestamp"]).total_seconds()
             if min_interval <= delta <= max_interval:
                 intervals.append(delta)
         if len(intervals) >= repeat_count - 1:
             avg_interval = sum(intervals) / len(intervals)
-            src_ips = {e["source_ip"] for e in dst_events}
-            user_agents = {e.get("user_agent") for e in dst_events if e.get("user_agent")}
-            findings.append({
-                "incident_type": INCIDENT_C2_BEACONING,
-                "severity": "high",
-                "confidence": min(1.0, len(intervals) / (repeat_count * 2)),
-                "source_ip": ", ".join(sorted(src_ips)[:5]),
-                "destination_ip": dst_ip,
-                "evidence": [
-                    f"{len(intervals)} periodic connections detected (avg interval: {avg_interval:.1f}s)",
-                    f"Interval range: {min_interval}s–{max_interval}s",
-                    f"Connection count: {len(dst_events)}",
-                    f"User-Agents: {[ua[:50] for ua in user_agents if ua][:5]}",
-                ],
-                "recommended_actions": [
-                    "Recommend blocking destination IP at firewall",
-                    "Recommend isolating beaconing internal host(s)",
-                    "Collect full packet capture for C2 traffic analysis",
-                    "Check for malware persistence mechanisms",
-                    "Recommend full endpoint scan on affected hosts",
-                    "Review DNS queries for domain reputation",
-                ],
-            })
+            # Calculate standard deviation (jitter)
+            variance = sum((x - avg_interval) ** 2 for x in intervals) / len(intervals)
+            jitter = math.sqrt(variance)
+            
+            # Periodicity test: jitter should be low relative to average interval
+            is_periodic = jitter < 10.0 or (avg_interval > 0 and jitter / avg_interval < 0.2)
+            
+            if is_periodic:
+                user_agents = {e.get("user_agent") for e in conv_events if e.get("user_agent")}
+                findings.append({
+                    "incident_type": INCIDENT_C2_BEACONING,
+                    "severity": "high",
+                    "confidence": min(1.0, len(intervals) / (repeat_count * 2)),
+                    "source_ip": src_ip,
+                    "destination_ip": dst_ip,
+                    "evidence": [
+                        f"{len(intervals)} periodic connections detected (avg interval: {avg_interval:.1f}s, jitter: {jitter:.2f}s)",
+                        f"Target port: {dst_port}/{protocol}",
+                        f"Connection count: {len(conv_events)}",
+                        f"User-Agents: {[ua[:50] for ua in user_agents if ua][:5]}",
+                    ],
+                    "recommended_actions": [
+                        "Recommend blocking destination IP at firewall",
+                        "Recommend isolating beaconing internal host(s)",
+                        "Collect full packet capture for C2 traffic analysis",
+                        "Check for malware persistence mechanisms",
+                        "Recommend full endpoint scan on affected hosts",
+                        "Review DNS queries for domain reputation",
+                    ],
+                })
     return findings
+
 
 
 def detect_ddos(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -377,14 +417,64 @@ def analyze_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not events:
         return []
 
-    all_findings: list[dict[str, Any]] = []
-    all_findings += detect_port_scan(events)
-    all_findings += detect_brute_force(events)
-    all_findings += detect_web_attacks(events)
-    all_findings += detect_data_exfiltration(events)
-    all_findings += detect_c2_beaconing(events)
-    all_findings += detect_ddos(events)
-    all_findings += detect_policy_violations(events)
+    # Load policies
+    policy = _load_policies()
 
-    log.info("Detection complete: %d findings from %d events", len(all_findings), len(events))
-    return all_findings
+    # Filter events through allowlists
+    filtered_events = []
+    for e in events:
+        src = e.get("source_ip")
+        dst = e.get("destination_ip")
+
+        # Check trusted_ips
+        if src in policy["trusted_ips"] or dst in policy["trusted_ips"]:
+            continue
+
+        # Check approved_scanners
+        if src in policy["approved_scanners"]:
+            continue
+
+        # Check trusted_cidrs
+        is_trusted_cidr = False
+        for cidr in policy["trusted_cidrs"]:
+            try:
+                net = ipaddress.ip_network(cidr)
+                if (src and ipaddress.ip_address(src) in net) or (dst and ipaddress.ip_address(dst) in net):
+                    is_trusted_cidr = True
+                    break
+            except Exception:
+                pass
+        if is_trusted_cidr:
+            continue
+
+        filtered_events.append(e)
+
+    if not filtered_events:
+        return []
+
+    # Inject active blocked ports into global _BLOCKED_PORTS
+    global _BLOCKED_PORTS
+    if "blocked_ports" in policy:
+        _BLOCKED_PORTS = set(policy["blocked_ports"])
+
+    all_findings: list[dict[str, Any]] = []
+    all_findings += detect_port_scan(filtered_events)
+    all_findings += detect_brute_force(filtered_events)
+    all_findings += detect_web_attacks(filtered_events)
+    all_findings += detect_data_exfiltration(filtered_events)
+    all_findings += detect_c2_beaconing(filtered_events)
+    all_findings += detect_ddos(filtered_events)
+    all_findings += detect_policy_violations(filtered_events)
+
+    # Filter out suppressed findings
+    suppressed_ids = set(policy.get("suppressed_detectors") or [])
+    final_findings = []
+    for f in all_findings:
+        detector_id = f"rule.{f['incident_type'].lower().replace(' ', '_').replace('/', '_')}"
+        if f["incident_type"] in suppressed_ids or detector_id in suppressed_ids:
+            continue
+        final_findings.append(f)
+
+    log.info("Detection complete: %d findings from %d events (%d events filtered)", len(final_findings), len(events), len(events) - len(filtered_events))
+    return final_findings
+

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,8 +25,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./niro.db"
 
     # LLM
-    llm_provider: str = "anthropic"
+    llm_provider: str = "google"
     llm_api_key: str = ""
+    google_api_key: str = ""
     llm_api_base: str = ""
     llm_model: str = ""
     llm_max_tokens: int = 1024
@@ -34,6 +36,7 @@ class Settings(BaseSettings):
     llm_model_openai: str = "gpt-4o"
     llm_model_ollama: str = "llama3.1:8b"
     llm_model_gemini: str = "gemini-1.5-flash"
+    llm_model_google: str = "gemini-1.5-flash"
 
     # Detection thresholds
     port_scan_threshold: int = 10
@@ -48,6 +51,17 @@ class Settings(BaseSettings):
     beacon_repeat_count: int = 6
     flood_threshold: int = 100
     flood_window_seconds: int = 60
+    ml_anomaly_enabled: bool = True
+    ml_anomaly_threshold: float = 0.92
+    correlation_window_hours: int = 24
+    correlation_max_evidence_items: int = 100
+
+    # Listeners (disabled by default)
+    enable_tcp_listener: bool = False
+    enable_udp_listener: bool = False
+    tcp_listener_port: int = 9001
+    udp_listener_port: int = 9002
+    listener_host: str = "127.0.0.1"
 
     # Response
     enable_real_response: bool = False
@@ -55,6 +69,18 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: str = "*"
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug(cls, value: object) -> bool:
+        """Accept common deployment strings from host environments."""
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"release", "prod", "production", "false", "0", "no", "off"}:
+                return False
+            if normalized in {"debug", "dev", "development", "true", "1", "yes", "on"}:
+                return True
+        return bool(value)
 
     @property
     def effective_llm_model(self) -> str:
@@ -66,8 +92,9 @@ class Settings(BaseSettings):
             "openai": self.llm_model_openai,
             "ollama": self.llm_model_ollama,
             "gemini": self.llm_model_gemini,
+            "google": self.llm_model_google,
         }
-        return mapping.get(self.llm_provider, self.llm_model_anthropic)
+        return mapping.get(self.llm_provider, self.llm_model_google)
 
     @property
     def allowed_actions_set(self) -> set[str]:
