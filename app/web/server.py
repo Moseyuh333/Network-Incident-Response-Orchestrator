@@ -23,7 +23,6 @@ from app.models.incident import Incident
 from app.services.agent_runs import run_agent_for_incident
 from scripts.run_pipeline import run_pipeline
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
 FRONTEND_DIST_DIR = Path(__file__).resolve().parents[2] / "ui" / "dist"
 RUNTIME_DIR = PI_DIR / "runtime" / "web"
 RUNS_DIR = RUNTIME_DIR / "runs"
@@ -58,7 +57,6 @@ def create_app() -> FastAPI:
     create_db_and_tables()
     app = FastAPI(title="Network Incident Response Orchestrator")
     app.include_router(v1_router)
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     frontend_assets = FRONTEND_DIST_DIR / "assets"
     if frontend_assets.exists():
         app.mount("/assets", StaticFiles(directory=frontend_assets), name="frontend-assets")
@@ -89,7 +87,13 @@ def create_app() -> FastAPI:
         frontend_index = FRONTEND_DIST_DIR / "index.html"
         if frontend_index.exists():
             return HTMLResponse(frontend_index.read_text(encoding="utf-8"))
-        return HTMLResponse((STATIC_DIR / "index.html").read_text(encoding="utf-8"))
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Frontend bundle not built. Run `cd ui && npm install && npm run build` "
+                "to generate ui/dist/index.html."
+            ),
+        )
 
     @app.get("/api/status")
     def status() -> dict[str, Any]:

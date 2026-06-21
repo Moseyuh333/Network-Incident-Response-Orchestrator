@@ -35,11 +35,12 @@ ml = [
     "numpy>=1.26.0",
 ]
 reports = [
-    # Optional: enables ``report.docx`` output from the report-generation
-    # skill. The skill degrades gracefully (still emits .md/.json/.txt) if
-    # python-docx is not installed.
+    # Optional: enables ``report.docx`` + ``report.pdf`` output from the
+    # report-generation skill. The skill degrades gracefully (still emits
+    # .md/.json/.txt) if either library is not installed.
     "python-docx>=1.1.0",
-]
+    "reportlab>=4.0.0",
+] # placeholder so ``pip install -e .[all]`` works once subdeps exist
 all = [
     "network-ir-orchestrator[ml,dev,reports]",
 ] # placeholder so ``pip install -e .[all]`` works once subdeps exist

@@ -1,7 +1,7 @@
 ---
 name: report-generation
 description: >
-  Generate the final incident report in Markdown, JSON, plain text (.txt), and Word (.docx) formats summarizing evidence, findings, actions, and verification.
+  Generate the final incident report in Markdown, JSON, plain text (.txt), Word (.docx), and PDF formats summarizing evidence, findings, actions, and verification.
 triggers:
   - report
   - generate report
@@ -13,6 +13,7 @@ outputs:
   - json_report_path: str
   - text_report_path: str
   - docx_report_path: str
+  - pdf_report_path: str
 safety: read-only
 ---
 
@@ -28,8 +29,14 @@ Assemble all incident facts, actions, and verification metrics into structured f
 | Markdown | `<id>.md`      | Human-readable technical narrative               |
 | Plain text | `<id>.txt`   | Plain-text fallback (log-friendly, no formatting)|
 | Word   | `<id>.docx`      | Formatted document for review/print/hand-off     |
+| PDF    | `<id>.pdf`       | Universal document for print, email, archival    |
 
-All four files are produced from the same incident state in one invocation so
+All five files are produced from the same incident state in one invocation so
 the artefacts stay in lock-step. The Markdown content is the source of truth —
-JSON / TXT / DOCX are derived from it (JSON re-parses the structured fields;
-TXT strips Markdown; DOCX renders headings/paragraphs via python-docx).
+JSON / TXT / DOCX / PDF are derived from it (JSON re-parses the structured
+fields; TXT strips Markdown; DOCX renders headings/paragraphs via python-docx;
+PDF renders via reportlab with the same field layout).
+
+The ``.docx`` and ``.pdf`` outputs are best-effort: if the corresponding
+library is missing the other formats are still produced and a non-fatal
+warning is logged.
