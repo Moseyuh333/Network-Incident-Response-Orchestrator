@@ -35,8 +35,8 @@ class Settings(BaseSettings):
     llm_model_anthropic: str = "claude-sonnet-4-20250514"
     llm_model_openai: str = "gpt-4o"
     llm_model_ollama: str = "llama3.1:8b"
-    llm_model_gemini: str = "gemini-1.5-flash"
-    llm_model_google: str = "gemini-1.5-flash"
+    llm_model_gemini: str = "models/gemma-4-31b-it"
+    llm_model_google: str = "models/gemma-4-31b-it"
 
     # Detection thresholds
     port_scan_threshold: int = 10

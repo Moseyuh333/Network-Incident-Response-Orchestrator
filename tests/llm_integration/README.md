@@ -24,7 +24,7 @@ The tests reuse the `.env` file in the project root. Make sure:
 ```bash
 LLM_PROVIDER=google
 LLM_API_KEY=<your-key>     # or GOOGLE_API_KEY
-LLM_MODEL=gemini-1.5-flash # recommended — fast, cheap, reliable
+LLM_MODEL=models/gemma-4-31b-it # recommended Google model
 ```
 
 We **don't** auto-set the model. If you keep the default

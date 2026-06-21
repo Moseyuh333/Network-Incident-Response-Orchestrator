@@ -1534,7 +1534,7 @@ function App() {
 
         <div className="sidebar-footer">
           <div>DB Status: Connected</div>
-          <div>Model: {status?.llm.model || "gemini-1.5-flash"}</div>
+          <div>Model: {status?.llm.model || "models/gemma-4-31b-it"}</div>
           <div>Version: {status?.version || "0.1.0"}</div>
         </div>
       </aside>
@@ -2855,7 +2855,7 @@ function App() {
                       type="text"
                       value={llmModel}
                       onChange={(e) => setLlmModel(e.target.value)}
-                      placeholder="gemini-1.5-flash or your Google model id"
+                      placeholder="models/gemma-4-31b-it or your Google model id"
                     />
                   </label>
                   <label>
