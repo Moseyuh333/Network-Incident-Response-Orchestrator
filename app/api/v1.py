@@ -18,9 +18,7 @@ try:
     for _k, _v in _ENV_FILE_VALUES.items():
         if _k not in os.environ and _v is not None:
             os.environ[_k] = _v
-    # The loop variables are only created when .env contains entries.
-    # Avoid deleting them unconditionally so a missing/empty .env is valid.
-    del _dotenv_values, _ENV_FILE_VALUES
+    del _k, _v, _dotenv_values, _ENV_FILE_VALUES
 except ImportError:
     pass
 

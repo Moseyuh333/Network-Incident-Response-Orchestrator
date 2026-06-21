@@ -68,13 +68,14 @@ Hệ thống chạy dưới [Pi Coding Agent](https://github.com/microsoft/pi-co
 - Human-in-the-loop approval queue cho mọi containment action
 - Verification step sau execute
 
-### 2.4 Reporting (4 format)
+### 2.4 Reporting (5 format)
 | Format | File | Mục đích |
 |---|---|---|
 | Markdown | `<id>.md` | Source of truth, GitHub/GitLab rendering |
 | JSON | `<id>.json` | Machine-readable, SIEM ingest |
 | Plain Text | `<id>.txt` | SIEM logs, `grep` search |
 | Word | `<id>.docx` | Báo cáo chính thức, in ấn, gửi CISO |
+| PDF | `<id>.pdf` | Universal — in ấn, email, lưu trữ |
 
 Xem chi tiết tại [§ 9 Report Generation](#9-report-generation).
 
@@ -315,7 +316,7 @@ Network-Incident-Response-Orchestrator/
 │   ├── schemas/                  # Pydantic models
 │   ├── services/                 # Business logic
 │   ├── skills/                   # In-repo skills
-│   └── web/                      # FastAPI web server + UI
+│   └── web/                      # FastAPI web server (serves `ui/dist/`)
 ├── .pi/                          # Pi Coding Agent resources
 │   ├── agents/                   # 15 agent profiles (.md)
 │   ├── prompts/                  # System + 4 task prompts
@@ -397,7 +398,7 @@ Cùng CLI, cùng API `/api/analyze` — chỉ khác agent loop.
 
 ### 9.1 Skill `.pi/skills/report-generation/`
 
-Tạo **4 file artefact** từ 1 incident:
+Tạo **5 file artefact** từ 1 incident:
 
 | Format | File | Mục đích | Viewer |
 |---|---|---|---|
@@ -405,6 +406,7 @@ Tạo **4 file artefact** từ 1 incident:
 | JSON | `<id>.json` | Machine-readable | SIEM, scripts |
 | Plain text | `<id>.txt` | Log-friendly | `grep`, `tail` |
 | Word | `<id>.docx` | Formatted report | MS Word, LibreOffice |
+| PDF | `<id>.pdf` | Universal document | Adobe Reader, browser |
 
 ### 9.2 Code Path
 
@@ -414,21 +416,23 @@ main()
   ├─ write <id>.md      # giữ nguyên Markdown
   ├─ write <id>.json    # structured JSON
   ├─ write <id>.txt     # _markdown_to_text: strip **bold** / `code` / heading
-  └─ write <id>.docx    # _write_docx: python-docx headings + bullets + tables
+  ├─ write <id>.docx    # _write_docx: python-docx headings + bullets + tables
+  └─ write <id>.pdf     # _write_pdf: reportlab SimpleDocTemplate (A4, Helvetica)
 ```
 
-### 9.3 Best-Effort `.docx`
+### 9.3 Best-Effort `.docx` & `.pdf`
 
-Nếu `python-docx` chưa cài, skill vẫn ghi 3 file kia và in warning:
+Nếu `python-docx` hoặc `reportlab` chưa cài, skill vẫn ghi các file còn lại và in warning:
 
 ```
 [!] python-docx not installed — skipping <id>.docx
+[!] reportlab not installed — skipping <id>.pdf
 ```
 
-Cài thêm:
+Cài đầy đủ:
 
 ```bash
-pip install -r requirements-reports.txt
+pip install -r requirements-reports.txt   # python-docx + reportlab
 ```
 
 ### 9.4 Cú Pháp Sử Dụng

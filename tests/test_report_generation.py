@@ -221,6 +221,15 @@ def test_full_skill_produces_md_json_txt_and_docx(skill_module, monkeypatch, tmp
         # Degraded mode: file absent, but main() did not raise.
         assert not docx_path.exists()
 
+    # pdf: skipped if reportlab missing; otherwise the file starts with %PDF-.
+    pdf_path = reports_dir / "INC-TEST-REPORT.pdf"
+    if importlib.util.find_spec("reportlab") is not None:
+        assert pdf_path.exists(), "pdf file missing even though reportlab is installed"
+        with pdf_path.open("rb") as fh:
+            assert fh.read(5) == b"%PDF-", "pdf file is not a valid PDF"
+    else:
+        assert not pdf_path.exists()
+
 
 def test_docx_writer_emits_zip_container(skill_module, tmp_path) -> None:
     """Direct test of ``_write_docx`` — verifies the .docx writer path."""
@@ -289,4 +298,74 @@ def test_docx_writer_emits_zip_container(skill_module, tmp_path) -> None:
         from sqlmodel import delete as _delete
         with Session(engine) as session:
             session.exec(_delete(Incident).where(Incident.public_id == "INC-TEST-DOCX"))
+            session.commit()
+
+
+def test_pdf_writer_emits_valid_pdf(skill_module, tmp_path) -> None:
+    """Direct test of ``_write_pdf`` — verifies PDF magic header."""
+    pdf_spec = importlib.util.find_spec("reportlab")
+    if pdf_spec is None:
+        pytest.skip("reportlab not installed in this environment")
+
+    from datetime import datetime, timezone
+    from sqlmodel import Session
+
+    from app.db.session import engine
+    from app.models.incident import AuditEntry, Finding, Incident, ResponseAction
+
+    from sqlmodel import delete
+    with Session(engine) as session:
+        session.exec(delete(Incident).where(Incident.public_id == "INC-TEST-PDF"))
+        session.commit()
+        session.expire_on_commit = False
+        now = datetime.now(timezone.utc)
+        inc = Incident(
+            public_id="INC-TEST-PDF",
+            title="pdf test",
+            incident_type="brute_force",
+            severity="high",
+            confidence=0.9,
+            status="open",
+            source_ip="203.0.113.30",
+            destination_ip="10.10.20.30",
+            first_seen=now,
+            last_seen=now,
+            summary="s",
+            llm_summary="LLM body for PDF test",
+            mitre_mapping=[{"tactic": "Credential Access", "technique_id": "T1110", "technique_name": "Brute Force"}],
+            recommended_actions=[],
+        )
+        session.add(inc)
+        session.commit()
+        session.refresh(inc)
+        finding = Finding(
+            incident_id=inc.id, detector_id="d", incident_type="brute_force",
+            severity="high", confidence=0.9, evidence_summary="5 failed logins",
+        )
+        action = ResponseAction(
+            incident_id=inc.id, action_type="simulate_block_ip",
+            status="proposed", risk="low", simulated=True,
+        )
+        audit = AuditEntry(
+            target_type="incident", target_id=inc.public_id, actor="test",
+            action="opened", before_state={}, after_state={}, timestamp=now,
+        )
+        session.add_all([finding, action, audit])
+        session.commit()
+
+    try:
+        snapshot = skill_module._snapshot(inc, [finding], [action], [audit])
+        out_path = tmp_path / "out.pdf"
+        skill_module._write_pdf(out_path, snapshot)
+        assert out_path.exists()
+        with out_path.open("rb") as fh:
+            header = fh.read(8)
+            # PDF magic: "%PDF-" (5 bytes) + version bytes
+            assert header.startswith(b"%PDF-"), f"not a valid PDF, header={header!r}"
+        # Spot-check file is non-trivial
+        assert out_path.stat().st_size > 1000, "PDF is suspiciously small"
+    finally:
+        from sqlmodel import delete as _delete
+        with Session(engine) as session:
+            session.exec(_delete(Incident).where(Incident.public_id == "INC-TEST-PDF"))
             session.commit()

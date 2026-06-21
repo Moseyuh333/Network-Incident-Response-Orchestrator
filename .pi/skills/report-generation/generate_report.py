@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Incident report generator script.
 
-Produces four artefacts from one incident:
+Produces five artefacts from one incident:
 
 1. ``<public_id>.json``  — machine-readable structured payload
 2. ``<public_id>.md``    — Markdown narrative (source of truth)
 3. ``<public_id>.txt``   — plain-text rendering of the Markdown (log-friendly)
 4. ``<public_id>.docx``  — Microsoft Word document rendered via python-docx
+5. ``<public_id>.pdf``   — PDF document rendered via reportlab
 
-The docx output is best-effort: if ``python-docx`` is not installed we fall
-back to the three text formats and emit a non-fatal warning to stderr so the
-agent loop can still surface the report. The other three formats are always
-written.
+The ``.docx`` and ``.pdf`` outputs are best-effort: if the corresponding
+library is missing we keep the other formats and emit a non-fatal warning
+to stderr so the agent loop can still surface the report. The first
+three formats are always written.
 """
 
 from __future__ import annotations
@@ -178,6 +179,19 @@ def main() -> None:
             docx_error = f"docx writer failed: {exc}"
             print(f"[!] {docx_error}", file=sys.stderr)
 
+        # PDF document. Best-effort: if reportlab is missing we keep the
+        # other formats and warn instead of failing the whole skill.
+        pdf_path = REPORT_DIR / f"{incident.public_id}.pdf"
+        pdf_error: str | None = None
+        try:
+            _write_pdf(pdf_path, snapshot)
+        except ImportError as exc:
+            pdf_error = f"reportlab not installed: {exc}"
+            print(f"[!] {pdf_error} — skipping {pdf_path.name}", file=sys.stderr)
+        except Exception as exc:  # pragma: no cover - writer failures vary
+            pdf_error = f"pdf writer failed: {exc}"
+            print(f"[!] {pdf_error}", file=sys.stderr)
+
         result_payload: dict[str, object] = {
             "incident_id": incident.id,
             "public_id": incident.public_id,
@@ -185,10 +199,13 @@ def main() -> None:
             "json_report": str(json_path),
             "text_report": str(txt_path),
             "docx_report": str(docx_path) if docx_error is None else None,
+            "pdf_report": str(pdf_path) if pdf_error is None else None,
             "status": "success",
         }
         if docx_error is not None:
             result_payload["docx_error"] = docx_error
+        if pdf_error is not None:
+            result_payload["pdf_error"] = pdf_error
         print(json.dumps(result_payload, indent=2))
 
 
@@ -377,6 +394,199 @@ def _write_docx(path: Path, snapshot: dict[str, object]) -> None:
         )
 
     document.save(str(path))
+
+
+def _write_pdf(path: Path, snapshot: dict[str, object]) -> None:
+    """Render the snapshot as a PDF file.
+
+    Lazy-imports ``reportlab`` so the rest of the script can run on hosts
+    that don't have reportlab installed (CI, minimal containers). Accepts
+    a snapshot dict (not live ORM objects) so it stays pure and works with
+    data the test suite produces from a real DB session.
+
+    Layout:
+    - Title (Helvetica-Bold 18pt)
+    - Metadata block (key-value table)
+    - Summary paragraph
+    - Network scopes bullets
+    - MITRE ATT&CK bullets
+    - Findings (one heading + body per finding)
+    - Containment actions (one heading + body per action)
+    - Timeline (bullets)
+
+    Uses the built-in Helvetica core font so no font files need to ship.
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.lib.colors import HexColor
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Paragraph,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+
+    incident = snapshot["incident"]  # type: ignore[index]
+    findings = snapshot["findings"]  # type: ignore[assignment]
+    actions = snapshot["actions"]  # type: ignore[assignment]
+    audits = snapshot["audits"]  # type: ignore[assignment]
+
+    styles = getSampleStyleSheet()
+    h1 = styles["Heading1"]
+    h2 = styles["Heading2"]
+    body = styles["BodyText"]
+    title_style = ParagraphStyle(
+        "Title",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=18,
+        leading=22,
+        spaceAfter=12,
+    )
+
+    doc = SimpleDocTemplate(
+        str(path),
+        pagesize=A4,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+        title=f"NIRO Incident Report {incident['public_id']}",
+        author="N.I.R.O. Report Generation Skill",
+    )
+
+    story: list = []
+    story.append(Paragraph(f"Incident Report: {incident['public_id']}", title_style))
+
+    # Metadata table
+    meta_rows = [
+        ["Title", str(incident.get("title") or "")],
+        ["Classification", str(incident.get("incident_type") or "")],
+        ["Severity", str(incident.get("severity") or "")],
+        ["Confidence", str(incident.get("confidence") or "")],
+        ["Status", str(incident.get("status") or "")],
+    ]
+    meta_table = Table(meta_rows, colWidths=[35 * mm, 125 * mm])
+    meta_table.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LINEBELOW", (0, -1), (-1, -1), 0.5, HexColor("#888888")),
+            ]
+        )
+    )
+    story.append(meta_table)
+    story.append(Spacer(1, 8))
+
+    # Summary
+    story.append(Paragraph("Summary", h1))
+    summary_text = (
+        incident.get("llm_summary")
+        or incident.get("summary")
+        or "No detailed analysis available."  # type: ignore[union-attr]
+    )
+    story.append(Paragraph(_escape(summary_text), body))  # type: ignore[arg-type]
+
+    # Network scopes
+    story.append(Paragraph("Network Scopes", h1))
+    story.append(Paragraph(f"Source IP: {incident.get('source_ip') or ''}", body))  # type: ignore[arg-type]
+    story.append(Paragraph(f"Destination IP: {incident.get('destination_ip') or ''}", body))  # type: ignore[arg-type]
+
+    # MITRE
+    story.append(Paragraph("MITRE ATT&amp;CK Mappings", h1))
+    mitre_list = incident.get("mitre_mapping") or []  # type: ignore[union-attr]
+    if mitre_list:
+        for m in mitre_list:
+            line = f"{m.get('tactic', 'Unknown')}: {m.get('technique_id', '')} - {m.get('technique_name', '')}"
+            story.append(Paragraph(_escape(line), body))  # type: ignore[arg-type]
+    else:
+        story.append(Paragraph("<i>No MITRE mappings recorded.</i>", body))  # type: ignore[arg-type]
+
+    # Findings
+    story.append(Paragraph("Findings &amp; Evidence", h1))
+    if findings:
+        for f in findings:
+            heading = f"{f['incident_type']} ({f['severity']})"
+            story.append(Paragraph(_escape(heading), h2))
+            story.append(
+                Paragraph(
+                    f"<b>Detector:</b> {_escape(str(f.get('detector_id') or ''))}",
+                    body,
+                )
+            )
+            story.append(
+                Paragraph(
+                    f"<b>Evidence:</b> {_escape(str(f.get('evidence_summary') or ''))}",
+                    body,
+                )
+            )
+            story.append(Spacer(1, 4))
+    else:
+        story.append(Paragraph("<i>No findings recorded.</i>", body))
+
+    # Actions
+    story.append(Paragraph("Containment &amp; Response Actions", h1))
+    if actions:
+        for a in actions:
+            heading = f"Action: {a['action_type']} (State: {a['status']})"
+            story.append(Paragraph(_escape(heading), h2))
+            story.append(
+                Paragraph(f"<b>Risk level:</b> {_escape(str(a.get('risk') or 'unknown'))}", body)
+            )
+            story.append(
+                Paragraph(f"<b>Simulated:</b> {_escape(str(a.get('simulated')))}", body)
+            )
+            if a.get("result"):
+                story.append(
+                    Paragraph(
+                        f"<b>Result:</b> {_escape(_json_dump(a['result']))}",
+                        body,
+                    )
+                )
+            if a.get("verification_result"):
+                story.append(
+                    Paragraph(
+                        f"<b>Verification:</b> {_escape(_json_dump(a['verification_result']))}",
+                        body,
+                    )
+                )
+            story.append(Spacer(1, 4))
+    else:
+        story.append(Paragraph("<i>No containment actions recorded.</i>", body))
+
+    # Timeline
+    story.append(Paragraph("Timeline", h1))
+    if audits:
+        for audit in audits:
+            ts = audit.get("timestamp") or "?"
+            actor = audit.get("actor") or "?"
+            action = audit.get("action") or "?"
+            line = f"[{ts}] {_escape(str(actor))} :: {_escape(str(action))}"
+            story.append(Paragraph(line, body))
+    else:
+        story.append(Paragraph("<i>No audit entries recorded.</i>", body))
+
+    doc.build(story)
+
+
+def _escape(text: str) -> str:
+    """Escape a string for safe inclusion in a reportlab Paragraph."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _json_dump(obj: object) -> str:
+    """Stable JSON string for embedding in reportlab Paragraphs."""
+    return json.dumps(obj, default=str, ensure_ascii=False)
 
 
 if __name__ == "__main__":

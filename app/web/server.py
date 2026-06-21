@@ -55,16 +55,11 @@ class ResourcePayload(BaseModel):
 def create_app() -> FastAPI:
     """Create the FastAPI app used by uvicorn and tests."""
     create_db_and_tables()
-    frontend_index = FRONTEND_DIST_DIR / "index.html"
-    if not frontend_index.is_file():
-        raise RuntimeError(
-            "UI bundle is missing. Run `npm run build --workspace ui` before starting the server."
-        )
-
     app = FastAPI(title="Network Incident Response Orchestrator")
     app.include_router(v1_router)
     frontend_assets = FRONTEND_DIST_DIR / "assets"
-    app.mount("/assets", StaticFiles(directory=frontend_assets), name="frontend-assets")
+    if frontend_assets.exists():
+        app.mount("/assets", StaticFiles(directory=frontend_assets), name="frontend-assets")
 
     from app.orchestration.engine import orchestrator_engine
     from app.collectors.listeners import NetworkListeners
@@ -88,9 +83,17 @@ def create_app() -> FastAPI:
             await listeners.stop()
 
     @app.get("/", response_class=HTMLResponse)
-    @app.get("/operations", response_class=HTMLResponse)
     def index() -> HTMLResponse:
-        return HTMLResponse(frontend_index.read_text(encoding="utf-8"))
+        frontend_index = FRONTEND_DIST_DIR / "index.html"
+        if frontend_index.exists():
+            return HTMLResponse(frontend_index.read_text(encoding="utf-8"))
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Frontend bundle not built. Run `cd ui && npm install && npm run build` "
+                "to generate ui/dist/index.html."
+            ),
+        )
 
     @app.get("/api/status")
     def status() -> dict[str, Any]:
