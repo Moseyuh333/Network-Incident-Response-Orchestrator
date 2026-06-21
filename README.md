@@ -1,242 +1,557 @@
-# N.I.R.O. - Network Incident Response Operations
+# N.I.R.O. — Network Incident Response Orchestrator
 
-Defensive network incident response orchestrator with LLM-assisted triage and automated safe containment capabilities.
+> **Defensive security tool** với LLM-assisted triage và automated safe containment.
+> Phân tích sự cố mạng, đề xuất MITRE mapping + response actions, xuất báo cáo 4 định dạng (`.md` + `.json` + `.txt` + `.docx`).
 
-> [!WARNING]
-> **Defensive Safety Statement**: This project is exclusively defensive. It does not implement, support, or compile offensive security tools (e.g. exploit generation, credential attacks, payloads, or reverse shells). All blocking and isolation features default to simulated mode to prevent accidental outages in testing environments.
-
----
-
-## 1. System Overview
-
-N.I.R.O. acts as an incident command center, parsing telemetry, extracting bidirectional packet flows, running rule and machine learning engines, and orchestrating triage phases via the Pi Agent Runtime.
-
-### 1.1 Key Features
-- **Bidirectional PCAP Parsing**: Extract 5-tuple flow metrics (durations, flags, packet length distribution, IAT).
-- **ML Anomaly Detection**: Unsupervised flow-based anomaly classification using an `IsolationForest` pipeline.
-- **Async Stage Queue**: Concurrent orchestration loops that prevent alert bottlenecks.
-- **TypeScript Pi Extensions**: Safety gates, audit logs, event bridges, and prompt injection filters.
-- **Cyber-Tactical Operations Console**: A high-density 3-column dark-mode dashboard with Cytoscape relationship graphs and live terminal streams.
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
+[![Node.js 18+](https://img.shields.io/badge/node-18%2B-green.svg)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![Tests: 44+](https://img.shields.io/badge/tests-44%2B-success.svg)](#5-tests--validation)
 
 ---
 
-## 2. Directory Layout
+## 📋 Mục Lục
 
-```text
-security-agents/
-├── .pi/                     # Canonical Pi Agent Resources
-│   ├── agents/              # Markdown Agent Profiles
-│   ├── prompts/             # Task Prompts
-│   ├── skills/              # Executable Procedures & Python scripts
-│   ├── extensions/          # TypeScript validators & permission gates
-│   └── data/policies/       # Enterprise Security Policies
-├── app/                     # FastAPI Backend Application
-│   ├── collectors/          # TCP/UDP Socket Listeners & log parsers
-│   ├── detection/           # Rule Engine & ML Anomaly modules
-│   └── db/                  # SQLModel session & database schemas
-├── ui/                      # React / Vite / TypeScript Operations Console
-├── scripts/                 # Administration and demo scripts
-└── docs/                    # Component & architecture design specifications
+1. [Tổng Quan](#1-tổng-quan)
+2. [Tính Năng](#2-tính-năng)
+3. [Cài Đặt](#3-cài-đặt)
+4. [Khởi Động Nhanh](#4-khởi-động-nhanh)
+5. [Tests & Validation](#5-tests--validation)
+6. [Cấu Hình LLM](#6-cấu-hình-llm)
+7. [Cấu Trúc Project](#7-cấu-trúc-project)
+8. [Pi Coding Agent](#8-pi-coding-agent)
+9. [Report Generation](#9-report-generation)
+10. [Troubleshooting](#10-troubleshooting)
+11. [Defense-in-Depth](#11-defense-in-depth)
+12. [Tài Liệu Tham Khảo](#12-tài-liệu-tham-khảo)
+
+---
+
+## 1. Tổng Quan
+
+**N.I.R.O.** (Network Incident Response Operations) là một **defensive security orchestrator** được thiết kế để:
+
+- Thu thập network telemetry (firewall logs, Zeek, Suricata, PCAP flows)
+- Phát hiện các mẫu tấn công phổ biến: brute-force, port-scan, C2 beaconing, data exfiltration, web attack
+- Tạo incident records với severity scoring + MITRE ATT&CK mapping
+- Chạy LLM agent phân tích ngữ nghĩa + đề xuất response actions
+- Sinh báo cáo sự cố tự động ở **4 format**: Markdown, JSON, Plain Text, Word (`.docx`)
+
+```
+[Network Telemetry] → [Collectors] → [Detection Engine] → [Incidents]
+                                                              ↓
+                              [Reports .md/.json/.txt/.docx] ← [LLM Agent]
 ```
 
+Hệ thống chạy dưới [Pi Coding Agent](https://github.com/microsoft/pi-coding-agent) runtime — load `.pi/agents/`, `.pi/skills/`, `.pi/extensions/`, `.pi/chains/` để điều phối multi-phase pipeline.
+
+> ⚠️ **Defensive-only**: Tool này **không** exploit, **không** payload, **không** credential attack. Tất cả containment actions mặc định ở **simulated mode** để tránh gây outage ngoài ý muốn.
+
 ---
 
-## 3. Quick Start
+## 2. Tính Năng
 
-### 3.1 Prerequisite Setup
-Configure python dependencies:
+### 2.1 Detection
+- **Rule Engine**: brute-force threshold, port-scan detector, C2 beaconing detection, exfiltration volume, flood detector
+- **ML Anomaly**: IsolationForest pipeline cho flow-based anomaly classification
+- **Correlation**: Nhóm nhiều findings thành 1 incident dựa trên source/dest IP overlap
+
+### 2.2 LLM-Assisted Triage
+- Multi-provider: Google Gemini, Anthropic Claude, OpenAI, **TokenRouter (MiniMax-M3)**, Ollama local
+- Schema-enforced JSON output (Pydantic validation)
+- Prompt-injection defense (UNTRUSTED_DATA tags + scrubber)
+- Fallback về rule-based analysis khi LLM không khả dụng
+
+### 2.3 Response Safety
+- 4 built-in actions: `simulate_block_ip`, `simulate_quarantine_host`, `simulate_disable_user`, `simulate_notify_admin`
+- Mặc định `ENABLE_REAL_RESPONSE=false` → tất cả actions là **simulated**
+- Human-in-the-loop approval queue cho mọi containment action
+- Verification step sau execute
+
+### 2.4 Reporting (4 format)
+| Format | File | Mục đích |
+|---|---|---|
+| Markdown | `<id>.md` | Source of truth, GitHub/GitLab rendering |
+| JSON | `<id>.json` | Machine-readable, SIEM ingest |
+| Plain Text | `<id>.txt` | SIEM logs, `grep` search |
+| Word | `<id>.docx` | Báo cáo chính thức, in ấn, gửi CISO |
+
+Xem chi tiết tại [§ 9 Report Generation](#9-report-generation).
+
+### 2.5 Web UI
+- FastAPI backend + React/Vite/TypeScript dashboard
+- Cytoscape relationship graphs
+- Live terminal streams
+- Dark-mode, high-density 3-column layout
+
+---
+
+## 3. Cài Đặt
+
+### 3.1 Yêu Cầu Hệ Thống
+
+| Thành phần | Version | Kiểm tra |
+|---|---|---|
+| Python | 3.11+ | `python --version` |
+| Node.js | 18+ | `node --version` |
+| Git Bash | Windows | (terminal POSIX-style) |
+| pip | 24+ | `pip --version` |
+
+### 3.2 Setup Virtual Environment
+
 ```bash
+# Di chuyển vào project
+cd "D:/New folder/Network-Incident-Response-Orchestrator"
+
+# Tạo venv
 python -m venv .venv
+
+# Activate (Git Bash trên Windows)
+source .venv/Scripts/activate
+
+# Hoặc PowerShell
 .\.venv\Scripts\Activate.ps1
-pip install -e .[ml,dev]
-Copy-Item .env.example .env
+
+# Hoặc Linux/macOS
+source .venv/bin/activate
 ```
 
-### 3.2 Initialize the Database & Run Tests
+### 3.3 Cài Dependencies
+
+Có **3 file requirements** tùy mục đích:
+
 ```bash
-python -m compileall app scripts
-python -m pytest
+# ① Runtime only (production)
+pip install -r requirements.txt
+
+# ② Runtime + report.docx support
+pip install -r requirements.txt -r requirements-reports.txt
+
+# ③ Runtime + dev/test
+pip install -r requirements.txt -r requirements-dev.txt
+
+# Full (dev + reports)
+pip install -r requirements.txt -r requirements-dev.txt -r requirements-reports.txt
 ```
 
-### 3.3 Validate Pi Resources
-Ensure Pi configurations conform to registries:
+Hoặc dùng editable mode (khuyến nghị cho dev):
+
 ```bash
-python scripts/validate_pi_resources.py
-python scripts/validate_chains.py
+pip install -e .[dev,reports]
 ```
 
-### 3.4 Build UI Console
-```bash
-cd ui
-npm install
-npm run build
-cd ..
-```
-
-### 3.5 Launch N.I.R.O. Command Server
-Run the FastAPI web application serving both APIs and the compiled Web UI:
-```bash
-python -m uvicorn app.web.server:app --reload
-```
-Open `http://localhost:8000/operations` in your browser.
-
----
-
-## 4. Demo Scenarios & Pipeline Checks
-
-To test the system end-to-end, execute the following commands in another terminal:
-
-1. **Load a synthetic SSH brute force scenario**:
-   ```bash
-   python scripts/load_demo.py --scenario ssh-bruteforce
-   ```
-   *Expected Output: Logs complete detection of 1 finding and creates an Incident ID.*
-
-2. **Trigger the AI agent triage and containment proposal**:
-   ```bash
-   python scripts/run_incident.py --latest
-   ```
-   *Expected Output: Agent completes runs, outputs a Markdown report summary, and registers proposed IP block recommendations in the approvals queue.*
-
-## 7.5 Pi Coding Agent Integration
-
-N.I.R.O. is designed to run under the [Pi Coding Agent](https://github.com/microsoft/pi-coding-agent) runtime
-(`@earendil-works/pi-coding-agent`). Pi is the canonical agent harness — it loads
-`.pi/agents/`, `.pi/prompts/`, `.pi/skills/`, `.pi/extensions/`, and `.pi/chains/`
-and orchestrates the tool-calling loop.
-
-### Install Pi
+### 3.4 Cài Pi Coding Agent
 
 ```bash
-# Pi is published as an npm workspace dependency (already wired in package.json).
-cd <project>
 npm install
 ```
 
-Pi is invoked via the workspace script. To run a Pi session against the
-incident-response chain:
+Lệnh này cài `@earendil-works/pi-coding-agent` (workspace devDep trong `package.json`).
+
+### 3.5 Khởi Tạo `.env`
 
 ```bash
-npx pi run --skill incident-response-chain --alert data/sample_alert.json
+cp .env.example .env
 ```
 
-### Pi settings (`.pi/settings.json`)
-
-The runtime reads the following settings. Create the file if it is
-absent — Pi falls back to environment variables in that case.
-
-```json
-{
-  "llm": {
-    "provider": "google",
-    "model": "gemini-2.5-flash",
-    "apiKeyEnv": "LLM_API_KEY"
-  },
-  "maxIterations": 8,
-  "maxToolCalls": 15,
-  "toolTimeoutSeconds": 30,
-  "outputTruncation": 4096
-}
-```
-
-### Skill / extension loading
-
-Pi auto-loads every directory under `.pi/skills/` and `.pi/extensions/`.
-A resource is "active" only if its `SKILL.md` / `index.ts` validates. Run
-the validators to see the active set:
-
-```bash
-python scripts/validate_pi_resources.py
-python scripts/validate_chains.py
-```
-
-### Fallback when Pi is unavailable
-
-If Pi is not installed in the environment (e.g. a CI runner without
-Node.js), N.I.R.O. still works end-to-end through the Python pipeline.
-The same `run_incident.py` CLI and `/api/analyze` endpoint are used in
-both modes; only the agent loop differs. Tests pass either way — see
-section 8 below.
+Mặc định `.env.example` ở **offline mode** — chạy đủ demo mà không cần API key. Để dùng LLM thật, xem [§ 6 Cấu Hình LLM](#6-cấu-hình-llm).
 
 ---
 
-## 7.6 LLM Configuration
+## 4. Khởi Động Nhanh
 
-N.I.R.O. can use Google Gemini, Anthropic Claude, OpenAI, or local
-Ollama. The provider is selected via `LLM_PROVIDER` in `.env`.
-
-### Google Gemini (default)
+### 4.1 Validate Project Resources
 
 ```bash
-LLM_PROVIDER=google
-LLM_MODEL=gemini-2.5-flash
-LLM_API_KEY=***    # or GOOGLE_API_KEY
-LLM_MAX_TOKENS=***
-LLM_TEMPERATURE=0.1
+# 15 agents + 14 skills trong .pi/
+python scripts/validate_pi_resources.py
+
+# 4 chains trong .pi/chains/
+python scripts/validate_chains.py
 ```
 
-`gemini-2.5-flash` is the recommended default — fast, schema-aware, and
-cheap. `gemma-4-31b-it` is also available but slower on long prompts.
+Cả hai phải in `[+] ... validation succeeded`.
 
-### Offline mode (no LLM)
+### 4.2 Chạy Demo End-to-End
 
-Leave the API key empty. N.I.R.O. runs in fully-deterministic fallback:
-the rule engine + ML detector produce findings, and the agent emits a
-template-based analysis citing the rule evidence. To force this mode:
+```bash
+# ① Load scenario SSH brute-force (tạo Incident trong DB)
+.venv/Scripts/python.exe scripts/load_demo.py --scenario ssh-bruteforce
+
+# ② Chạy LLM agent phân tích incident mới nhất
+.venv/Scripts/python.exe scripts/run_incident.py --latest
+
+# ③ Generate report (4 format)
+.venv/Scripts/python.exe .pi/skills/report-generation/generate_report.py --incident-id 7
+
+# ④ Xem reports
+ls .pi/reports/
+# INC-000007.md   INC-000007.json
+# INC-000007.txt  INC-000007.docx
+```
+
+### 4.3 Khởi Động Web UI
+
+```bash
+.venv/Scripts/python.exe -m uvicorn app.web.server:app --reload
+```
+
+Mở `http://localhost:8000/operations` trong browser.
+
+### 4.4 Available Demo Scenarios
+
+| Scenario | Mô tả |
+|---|---|
+| `ssh-bruteforce` | Nhiều SSH login fail từ 1 IP |
+| `port-scan` | Quét nhiều port từ 1 IP |
+| `c2-beaconing` | Kết nối định kỳ đến C2 server |
+| `data-exfil` | Outbound data lớn bất thường |
+| `false-positive` | Traffic hợp lệ (negative test) |
+
+```bash
+.venv/Scripts/python.exe scripts/load_demo.py --scenario <name>
+```
+
+---
+
+## 5. Tests & Validation
+
+### 5.1 Pytest (44+ tests)
+
+```bash
+# Full suite
+.venv/Scripts/python.exe -m pytest -v
+
+# Chỉ report generation (3 tests mới)
+.venv/Scripts/python.exe -m pytest tests/test_report_generation.py -v
+
+# Security scenarios (25 attack patterns)
+.venv/Scripts/python.exe -m pytest tests/security_scenarios/ -v
+
+# TokenRouter provider
+.venv/Scripts/python.exe -m pytest tests/test_tokenrouter_provider.py -v
+```
+
+### 5.2 LLM Integration Tests (opt-in, tốn quota)
+
+```bash
+RUN_LLM_TESTS=1 .venv/Scripts/python.exe -m pytest tests/llm_integration/ -v
+```
+
+### 5.3 Audit / Compliance
+
+```bash
+.venv/Scripts/python.exe tests/audit/audit.py --json audit-report.json
+.venv/Scripts/python.exe tests/audit/llm_compliance.py --json llm-compliance.json
+```
+
+### 5.4 Lint
+
+```bash
+.venv/Scripts/python.exe -m ruff check .
+.venv/Scripts/python.exe -m ruff format .
+```
+
+---
+
+## 6. Cấu Hình LLM
+
+### 6.1 Providers
+
+| Provider | `.env` config | Ưu điểm |
+|---|---|---|
+| **Google Gemini** (mặc định) | `LLM_PROVIDER=google`, `LLM_MODEL=gemini-2.5-flash` | Schema-aware, nhanh, rẻ |
+| **TokenRouter** | `LLM_PROVIDER=tokenrouter`, `LLM_MODEL=MiniMax-M3` | Reasoning model, OpenAI-compatible |
+| **Anthropic Claude** | `LLM_PROVIDER=anthropic`, `LLM_MODEL=claude-sonnet-4-20250514` | Reasoning mạnh |
+| **Ollama local** | `LLM_PROVIDER=ollama`, `LLM_MODEL=llama3.1:8b` | Không cần internet |
+
+### 6.2 Offline Mode (mặc định)
+
+Để chạy **không cần** API key, để trống:
 
 ```bash
 LLM_API_KEY=
 GOOGLE_API_KEY=
 ```
 
-Or simply remove those lines from `.env`. The system runs every demo
-scenario with zero network calls.
+Hệ thống tự động fallback về rule-based analysis. Đủ cho mọi demo scenario.
 
-### Ollama (local)
+### 6.3 TokenRouter (đã test)
 
 ```bash
-LLM_PROVIDER=ollama
-LLM_MODEL=llama3.1:8b
-LLM_API_BASE=http://localhost:11434
+LLM_PROVIDER=tokenrouter
+LLM_API_BASE=https://api.tokenrouter.com/v1
+LLM_API_KEY=<your-key>
+LLM_MODEL=MiniMax-M3
+LLM_MAX_TOKENS=1024
+LLM_TEMPERATURE=0.1
 ```
 
-Make sure `ollama serve` is running and the model is pulled:
+Provider adapter ở `app/llm/providers.py:174` (`TokenRouterProvider`) — OpenAI-compatible HTTP qua `httpx`. Có resilience layer:
+- 3 attempts, exponential backoff capped 4s
+- 30s deadline tổng
+- 503/UNAVAILABLE fail-fast (không retry overloaded model)
+- Strip `think` blocks + markdown fences trước khi parse JSON
 
-```bash
-ollama pull llama3.1:8b
-ollama serve
+---
+
+## 7. Cấu Trúc Project
+
 ```
-
-### Anthropic / OpenAI
-
-```bash
-LLM_PROVIDER=anthropic
-LLM_MODEL=claude-sonnet-4-20250514
-LLM_API_KEY=***
+Network-Incident-Response-Orchestrator/
+├── app/                          # FastAPI backend
+│   ├── agents/                   # LLM agent runtime (incident_response_agent.py, tools.py)
+│   ├── api/                      # REST endpoints (v1.py)
+│   ├── collectors/               # Network telemetry ingest
+│   ├── core/                     # Config (config.py), paths, redaction
+│   ├── db/                       # SQLModel session + schemas
+│   ├── detection/                # Rule + ML engine
+│   ├── incidents/                # Incident lifecycle
+│   ├── llm/                      # Provider adapters (Google / TokenRouter / Anthropic / Ollama)
+│   ├── models/                   # SQLModel schemas
+│   ├── orchestration/            # Pipeline runners
+│   ├── plugins/                  # Plugin registry
+│   ├── response/                 # Containment actions
+│   ├── schemas/                  # Pydantic models
+│   ├── services/                 # Business logic
+│   ├── skills/                   # In-repo skills
+│   └── web/                      # FastAPI web server + UI
+├── .pi/                          # Pi Coding Agent resources
+│   ├── agents/                   # 15 agent profiles (.md)
+│   ├── prompts/                  # System + 4 task prompts
+│   ├── skills/                   # 14 executable skills
+│   │   └── report-generation/    # ← Skill này generate .docx + .txt + .md + .json
+│   ├── extensions/               # TypeScript validators
+│   ├── chains/                   # 4 orchestration chains
+│   ├── data/                     # Sample alerts, policies, models
+│   └── reports/                  # Generated reports (output)
+├── scripts/                      # CLI tools
+│   ├── load_demo.py              # Load demo scenario
+│   ├── run_incident.py           # Run agent trên incident
+│   ├── run_pipeline.py           # Full pipeline
+│   ├── train_ml.py               # Train IsolationForest
+│   ├── validate_pi_resources.py  # Validate .pi/ assets
+│   └── validate_chains.py        # Validate chains
+├── tests/                        # Pytest (44+ tests)
+│   ├── test_report_generation.py # 3 tests cho report skill
+│   ├── security_scenarios/       # 25 attack scenarios
+│   ├── llm_integration/          # Opt-in LLM tests
+│   └── audit/                    # Compliance audit
+├── ui/                           # React/Vite/TypeScript dashboard
+├── docs/                         # Architecture docs (xem § 12)
+├── niro.db                       # SQLite database
+├── pyproject.toml                # Project metadata
+├── requirements.txt              # Runtime deps
+├── requirements-dev.txt          # Dev/test deps
+├── requirements-reports.txt      # Optional python-docx
+├── package.json                  # npm workspace (Pi agent)
+├── package-lock.json
+└── README.md                     # ← File này
 ```
 
 ---
 
-## 7.7 Troubleshooting
+## 8. Pi Coding Agent
 
-| Symptom | Likely cause | Fix |
+N.I.R.O. chạy dưới **Pi Coding Agent runtime** (`@earendil-works/pi-coding-agent`). Pi load 5 resource types từ `.pi/`:
+
+| Directory | Số lượng | Mô tả |
 |---|---|---|
-| `LLM provider not configured` | Empty key in `.env` | Set `LLM_API_KEY` (offline mode is OK too) |
-| `503 UNAVAILABLE` from Google | Quota exceeded or model overloaded | Switch to a different model, or wait and retry |
-| UI shows "no incidents" | DB is empty | Run `python scripts/load_demo.py --scenario ssh-bruteforce` |
-| `ModuleNotFoundError: pypdf` | Dev dep not installed | `pip install -e ".[dev]"` |
-| `tsc not found` in `validate_pi` | TypeScript not installed | `npm install` in project root |
+| `.pi/agents/` | 15 | Agent profiles (intake, detection, mitre, response, **report**, …) |
+| `.pi/prompts/` | 6 | System prompt + 5 task prompts |
+| `.pi/skills/` | 14 | Executable skills (event-ingestion, mitre-mapping, **report-generation**, …) |
+| `.pi/extensions/` | 5 | TypeScript validators, permission gates, audit loggers |
+| `.pi/chains/` | 4 | Orchestration chains (incident-response, explain-incident, live-event, **report**) |
 
-## 7.8 Known limitations
+### 8.1 Chạy 1 Chain Thủ Công
 
-- ML anomaly detector is unsupervised — it flags statistical outliers
-  but does not classify attack family. Combine with rule engine for
-  family labels.
-- LLM `gemma-4-31b-it` may return empty text on long structured-output
-  prompts. Use `gemini-2.5-flash` instead.
-- Free-tier Gemini API has 20 requests/day quota. The LLM integration
-  test suite (opt-in) costs ~6 requests per full run.
-- PCAP upload supports offline extraction; live capture is not
-  implemented in the default deployment.
+```bash
+npx pi run --skill incident-response-chain --alert .pi/data/sample_alert.json
+```
+
+### 8.2 Validate Pi Resources
+
+```bash
+python scripts/validate_pi_resources.py
+python scripts/validate_chains.py
+```
+
+Mỗi agent `.md` cần YAML frontmatter với 6 trường bắt buộc: `name`, `role`, `input_artifact`, `output_artifact`, `allowed_skills`, `allowed_tools`.
+
+Mỗi skill cần `SKILL.md` + ít nhất 1 file `.py` implementation.
+
+### 8.3 Fallback Khi Pi Không Khả Dụng
+
+Nếu môi trường không có Node.js (CI runner chẳng hạn), N.I.R.O. vẫn chạy end-to-end qua Python pipeline:
+
+```bash
+python scripts/load_demo.py --scenario ssh-bruteforce
+python scripts/run_incident.py --latest
+```
+
+Cùng CLI, cùng API `/api/analyze` — chỉ khác agent loop.
 
 ---
+
+## 9. Report Generation
+
+### 9.1 Skill `.pi/skills/report-generation/`
+
+Tạo **4 file artefact** từ 1 incident:
+
+| Format | File | Mục đích | Viewer |
+|---|---|---|---|
+| Markdown | `<id>.md` | Source of truth | GitHub/GitLab |
+| JSON | `<id>.json` | Machine-readable | SIEM, scripts |
+| Plain text | `<id>.txt` | Log-friendly | `grep`, `tail` |
+| Word | `<id>.docx` | Formatted report | MS Word, LibreOffice |
+
+### 9.2 Code Path
+
+```
+main() 
+  ├─ _snapshot(incident, findings, actions, audits)  # dict thuần (no ORM)
+  ├─ write <id>.md      # giữ nguyên Markdown
+  ├─ write <id>.json    # structured JSON
+  ├─ write <id>.txt     # _markdown_to_text: strip **bold** / `code` / heading
+  └─ write <id>.docx    # _write_docx: python-docx headings + bullets + tables
+```
+
+### 9.3 Best-Effort `.docx`
+
+Nếu `python-docx` chưa cài, skill vẫn ghi 3 file kia và in warning:
+
+```
+[!] python-docx not installed — skipping <id>.docx
+```
+
+Cài thêm:
+
+```bash
+pip install -r requirements-reports.txt
+```
+
+### 9.4 Cú Pháp Sử Dụng
+
+```bash
+# Qua CLI (sau khi đã có incident trong DB)
+.venv/Scripts/python.exe .pi/skills/report-generation/generate_report.py --incident-id 7
+
+# Qua Pi chain (tự động trong pipeline)
+# .pi/chains/report-chain.yaml → report-agent → report-generation skill
+```
+
+### 9.5 Output JSON
+
+```json
+{
+  "incident_id": 7,
+  "public_id": "INC-000007",
+  "markdown_report": "D:\\...\\.pi\\reports\\INC-000007.md",
+  "json_report": "D:\\...\\.pi\\reports\\INC-000007.json",
+  "text_report": "D:\\...\\.pi\\reports\\INC-000007.txt",
+  "docx_report": "D:\\...\\.pi\\reports\\INC-000007.docx",
+  "status": "success"
+}
+```
+
+---
+
+## 10. Troubleshooting
+
+| # | Symptom | Nguyên nhân | Fix |
+|---|---|---|---|
+| 1 | `ModuleNotFoundError: fastapi` | Chưa activate venv | `source .venv/Scripts/activate` |
+| 2 | `ModuleNotFoundError: docx` | Thiếu python-docx | `pip install -r requirements-reports.txt` |
+| 3 | `LLM provider not configured` | `.env` thiếu key | Set `LLM_API_KEY=***` hoặc để trống để chạy offline |
+| 4 | `503 UNAVAILABLE` từ Google | Quota exceeded | Switch model hoặc đợi quota reset |
+| 5 | UI shows "no incidents" | DB rỗng | `python scripts/load_demo.py --scenario ssh-bruteforce` |
+| 6 | `tsc not found` trong validate | Node chưa cài | `npm install` ở project root |
+| 7 | `DetachedInstanceError` | SQLAlchemy 2.x expire-on-commit | Đã fix trong test (snapshot dict + `expire_on_commit=False`) |
+| 8 | `No module named pytest` | Chưa cài dev extras | `pip install -r requirements-dev.txt` |
+| 9 | `ValidationError: schema` | LLM trả về JSON không đúng schema | Fallback tự động về template analysis |
+| 10 | Free-tier quota hit | Gemini 20 req/day | Switch sang TokenRouter hoặc đợi |
+
+---
+
+## 11. Defense-in-Depth
+
+> **N.I.R.O. là defensive security tool. Không khai thác, không payload, không credential attack.**
+
+Các safe-by-default properties:
+
+1. **Simulated actions**: `ENABLE_REAL_RESPONSE=false` mặc định. Để thật sự block IP, cần opt-in explicit + allowlist cụ thể.
+2. **Human-in-the-loop**: Mọi containment action phải qua approval queue trước khi execute.
+3. **Audit log**: Mọi state change được log vào `AuditEntry` với actor + before/after state.
+4. **Prompt injection defense**: `<UNTRUSTED_DATA>` tags + scrubber trong `incident_response_agent._sanitise_context()`.
+5. **Schema validation**: LLM output phải pass Pydantic schema trước khi trust.
+6. **PI safety gates**: TypeScript validators trong `.pi/extensions/security-permission-gate/` enforce permission boundaries.
+
+Xem chi tiết tại `docs/response-safety.md` và `SECURITY.md`.
+
+---
+
+## 12. Tài Liệu Tham Khảo
+
+### 12.1 Architecture & Design (`docs/`)
+
+| File | Nội dung |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | System architecture, component view, data flow |
+| [`docs/pi-resources.md`](docs/pi-resources.md) | **15 Pi agents + 14 skills + 4 chains + 5 extensions + `.pi/` layout** (consolidated) |
+| [`docs/api.md`](docs/api.md) | REST API endpoints (`/api/v1/*`) |
+| [`docs/network-ingestion.md`](docs/network-ingestion.md) | Collectors (TCP/UDP, Zeek, Suricata, PCAP) |
+| [`docs/ml-pipeline.md`](docs/ml-pipeline.md) | IsolationForest training & inference |
+| [`docs/response-safety.md`](docs/response-safety.md) | Containment actions, approval workflow |
+| [`docs/ui-ux.md`](docs/ui-ux.md) | Web dashboard design |
+| [`docs/demo-guide.md`](docs/demo-guide.md) | Demo script cho presentation |
+
+### 12.2 Vietnamese Guides (`docs/project-guide/`)
+
+Hướng dẫn song ngữ cho người mới:
+
+| File | Nội dung |
+|---|---|
+| [`docs/project-guide/01-bat-dau-nhanh.md`](docs/project-guide/01-bat-dau-nhanh.md) | Bắt đầu nhanh |
+| [`docs/project-guide/02-huong-dan-ui.md`](docs/project-guide/02-huong-dan-ui.md) | Hướng dẫn sử dụng UI |
+| [`docs/project-guide/03-tuy-bien-agent-skill-chain.md`](docs/project-guide/03-tuy-bien-agent-skill-chain.md) | Tuỳ biến agent/skill/chain |
+| [`docs/project-guide/04-du-lieu-api-pipeline.md`](docs/project-guide/04-du-lieu-api-pipeline.md) | Dữ liệu & API pipeline |
+| [`docs/project-guide/05-loi-thuong-gap.md`](docs/project-guide/05-loi-thuong-gap.md) | Lỗi thường gặp |
+
+### 12.3 External Links
+
+- **Pi Coding Agent**: https://github.com/microsoft/pi-coding-agent
+- **python-docx**: https://python-docx.readthedocs.io/
+- **Pydantic**: https://docs.pydantic.dev/
+- **SQLModel**: https://sqlmodel.tiangolo.com/
+- **FastAPI**: https://fastapi.tiangolo.com/
+
+---
+
+## 📜 License
+
+MIT — xem [LICENSE](LICENSE).
+
+## 👤 Author
+
+**Moseyuh333**
+
+## 🙏 Acknowledgments
+
+- Microsoft Pi Coding Agent team
+- Google Gemini, Anthropic Claude, TokenRouter
+- Open-source security community
+
+---
+
+> 💡 **Tip**: Để chạy full pipeline từ scratch:
+> ```bash
+> python -m venv .venv && source .venv/Scripts/activate
+> pip install -r requirements.txt -r requirements-dev.txt -r requirements-reports.txt
+> npm install
+> python scripts/validate_pi_resources.py && python scripts/validate_chains.py
+> .venv/Scripts/python.exe scripts/load_demo.py --scenario ssh-bruteforce
+> .venv/Scripts/python.exe scripts/run_incident.py --latest
+> .venv/Scripts/python.exe .pi/skills/report-generation/generate_report.py --incident-id 7
+> ls .pi/reports/  # 4 files generated
+> ```

@@ -1,0 +1,5 @@
+# Optional extras that the ``report-generation`` Pi skill needs to write
+# the ``.docx`` artefact. The skill degrades gracefully (still emits
+# ``.md`` + ``.json`` + ``.txt``) when python-docx is missing — install
+# this file only if you want Word output.
+python-docx>=1.1.0
