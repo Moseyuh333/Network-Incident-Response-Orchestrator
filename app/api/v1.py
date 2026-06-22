@@ -963,6 +963,36 @@ def put_llm_config(payload: dict[str, str]) -> dict[str, Any]:
     return _llm_config_response(saved=True)
 
 
+@router.get("/pi/agents/{name}")
+def get_pi_agent(name: str) -> dict[str, Any]:
+    """Return the raw markdown for a single Pi agent profile."""
+    import re
+
+    import yaml
+
+    safe_name = _safe_resource_name(name)
+    agent_path = PI_DIR / "agents" / f"{safe_name}.md"
+    if not agent_path.exists():
+        raise HTTPException(status_code=404, detail="Agent not found")
+    content = agent_path.read_text(encoding="utf-8")
+    match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", content, re.DOTALL)
+    meta: dict[str, Any] = {}
+    body = content
+    if match:
+        try:
+            meta = yaml.safe_load(match.group(1)) or {}
+            body = match.group(2)
+        except yaml.YAMLError:
+            meta = {}
+    return {
+        "name": safe_name,
+        "frontmatter": meta,
+        "body": body,
+        "raw": content,
+        "path": str(agent_path),
+    }
+
+
 @router.put("/pi/agents/{name}")
 def put_pi_agent(name: str, payload: dict[str, str]) -> dict[str, Any]:
     safe_name = _safe_resource_name(name)
@@ -979,6 +1009,29 @@ def put_pi_extension(name: str, payload: dict[str, str]) -> dict[str, Any]:
     ext_dir.mkdir(parents=True, exist_ok=True)
     (ext_dir / "index.ts").write_text(payload.get("content", ""), encoding="utf-8")
     return {"status": "saved", "name": safe_name}
+
+
+@router.get("/pi/chains/{name}")
+def get_pi_chain(name: str) -> dict[str, Any]:
+    """Return the raw YAML for a single Pi chain."""
+    import yaml
+
+    safe_name = _safe_resource_name(name)
+    chain_path = PI_DIR / "chains" / f"{safe_name}.yaml"
+    if not chain_path.exists():
+        raise HTTPException(status_code=404, detail="Chain not found")
+    raw = chain_path.read_text(encoding="utf-8")
+    parsed: dict[str, Any] = {}
+    try:
+        parsed = yaml.safe_load(raw) or {}
+    except yaml.YAMLError:
+        parsed = {}
+    return {
+        "name": safe_name,
+        "raw": raw,
+        "parsed": parsed,
+        "path": str(chain_path),
+    }
 
 
 @router.put("/pi/chains/{name}")

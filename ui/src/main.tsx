@@ -29,6 +29,63 @@ import {
 } from "lucide-react";
 import cytoscape from "cytoscape";
 import "./styles.css";
+// --- Error Boundary ---
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  ErrorBoundaryState
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("UI Error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          backgroundColor: '#0A0B0E',
+          color: '#E53935',
+          padding: '20px',
+          fontFamily: 'monospace'
+        }}>
+          <ShieldAlert size={48} />
+          <h1 style={{ marginTop: '20px' }}>UI CRASHED</h1>
+          <pre style={{ textAlign: 'left', maxWidth: '800px', overflow: 'auto' }}>
+            {this.state.error?.toString()}
+          </pre>
+          <button
+            className="btn btn-crimson"
+            style={{ marginTop: '20px' }}
+            onClick={() => window.location.reload()}
+          >
+            Reload Application
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+
 
 // --- Types ---
 type StatusPayload = {
@@ -334,8 +391,18 @@ function App() {
   const [selectedNodeDetails, setSelectedNodeDetails] = useState<any | null>(null);
   const [isGraphPaused, setIsGraphPaused] = useState<boolean>(false);
   const cyRef = useRef<cytoscape.Core | null>(null);
+  const pipelineTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Clear node details when selected incident changes
+  // Cleanup pipeline timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (pipelineTimeoutRef.current) {
+        clearTimeout(pipelineTimeoutRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     setSelectedNodeDetails(null);
   }, [selectedIncidentId]);

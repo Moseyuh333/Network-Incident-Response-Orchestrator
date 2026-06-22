@@ -42,7 +42,11 @@ def propose_action(
 
 def approve_action(session: Session, action: ResponseAction, actor: str = "operator") -> ResponseAction:
     before = action.model_dump()
-    if action.status != "awaiting_approval":
+    # Accept either ``awaiting_approval`` (new state machine) or ``proposed``
+    # (legacy / model default) as a pending state. This way the lifecycle
+    # keeps working for actions inserted before the rename, and for any
+    # code path that still relies on the SQLModel default value.
+    if action.status not in {"awaiting_approval", "proposed"}:
         raise ValueError(f"cannot approve action in state {action.status}")
     action.status = "approved"
     action.approved_by = actor
@@ -57,7 +61,7 @@ def approve_action(session: Session, action: ResponseAction, actor: str = "opera
 
 def reject_action(session: Session, action: ResponseAction, actor: str = "operator") -> ResponseAction:
     before = action.model_dump()
-    if action.status != "awaiting_approval":
+    if action.status not in {"awaiting_approval", "proposed"}:
         raise ValueError(f"cannot reject action in state {action.status}")
     action.status = "rejected"
     action.approved_by = actor
