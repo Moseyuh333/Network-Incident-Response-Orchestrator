@@ -299,6 +299,69 @@ function App() {
   const [alertInput, setAlertInput] = useState<string>("{\n  \"source_ip\": \"192.168.4.55\",\n  \"destination_ip\": \"10.0.0.12\",\n  \"event_type\": \"ssh\",\n  \"action\": \"failed_login\",\n  \"username\": \"admin\"\n}");
   const [busy, setBusy] = useState<boolean>(false);
 
+  // Manual Case dialog state — replaces the old `prompt()` flow so we can
+  // surface validation errors, disable the submit button while the API
+  // call is in flight, and trim the title client-side before sending.
+  const [manualCaseOpen, setManualCaseOpen] = useState<boolean>(false);
+  const [manualCaseTitle, setManualCaseTitle] = useState<string>("");
+  const [manualCaseSeverity, setManualCaseSeverity] =
+    useState<"low" | "medium" | "high" | "critical">("medium");
+  const [manualCaseBusy, setManualCaseBusy] = useState<boolean>(false);
+  const [manualCaseError, setManualCaseError] = useState<string>("");
+
+  function openManualCaseDialog() {
+    setManualCaseTitle("");
+    setManualCaseSeverity("medium");
+    setManualCaseError("");
+    setManualCaseOpen(true);
+  }
+
+  function closeManualCaseDialog() {
+    if (manualCaseBusy) return;
+    setManualCaseOpen(false);
+    setManualCaseError("");
+  }
+
+  async function submitManualCase() {
+    // Client-side trim+collapse matches the server's validator so the
+    // user gets the same answer whether they submit empty, whitespace,
+    // or padded input.
+    const collapsed = manualCaseTitle.replace(/\s+/g, " ").trim();
+    if (!collapsed) {
+      setManualCaseError(
+        "Title is required and cannot be empty or whitespace-only.",
+      );
+      return;
+    }
+    if (collapsed.length > 200) {
+      setManualCaseError("Title must be at most 200 characters.");
+      return;
+    }
+    setManualCaseBusy(true);
+    setManualCaseError("");
+    try {
+      await apiCall<any>("/api/v1/incidents", {
+        method: "POST",
+        body: JSON.stringify({
+          title: collapsed,
+          incident_type: "manual",
+          severity: manualCaseSeverity,
+        }),
+      });
+      setManualCaseOpen(false);
+      setManualCaseTitle("");
+      refreshData();
+    } catch (err: any) {
+      const message =
+        typeof err?.message === "string" && err.message
+          ? err.message
+          : "Failed to create manual incident.";
+      setManualCaseError(message);
+    } finally {
+      setManualCaseBusy(false);
+    }
+  }
+
   // Rules of Engagement Settings State
   const [roeSettings, setRoeSettings] = useState({
     labSafeMode: true,
@@ -2135,15 +2198,11 @@ function App() {
                 <h2>Incident Response Case Files</h2>
                 <div className="page-title-desc">Defensive cybersecurity records, artifacts and LLM-assisted summaries.</div>
               </div>
-              <button className="btn btn-info" onClick={() => {
-                const title = prompt("Enter manual incident title:", "Intruder Alert");
-                if (title) {
-                  apiCall<any>("/api/v1/incidents", {
-                    method: "POST",
-                    body: JSON.stringify({ title, incident_type: "manual", severity: "medium" })
-                  }).then(() => refreshData());
-                }
-              }}>
+              <button
+                className="btn btn-info"
+                onClick={openManualCaseDialog}
+                disabled={manualCaseBusy}
+              >
                 <Plus size={14} /> Create Manual Case
               </button>
             </div>

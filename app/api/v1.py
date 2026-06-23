@@ -24,6 +24,7 @@ except ImportError:
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, func, select
 
 from app.db.session import engine, get_session
@@ -304,6 +305,77 @@ def get_event(event_id: int, session: Annotated[Session, Depends(get_session)]) 
 @router.get("/incidents")
 def list_incidents(session: Annotated[Session, Depends(get_session)]) -> list[Incident]:
     return list(session.exec(select(Incident).order_by(Incident.updated_at.desc())).all())
+
+
+class ManualIncidentCreate(BaseModel):
+    """Payload for the UI's "Create Manual Case" button.
+
+    Kept permissive on purpose — operators may not have source/destination IPs
+    when filing a manual alert. Everything optional besides ``title``.
+
+    Title rules:
+    - Leading/trailing whitespace is stripped before storage.
+    - Whitespace-only or empty titles are rejected (422).
+    - Newlines / tabs collapse to a single space so the value stays
+      single-line for the UI list view.
+    """
+
+    title: str = Field(..., min_length=1, max_length=200)
+    incident_type: str = Field(default="manual", max_length=80)
+    severity: str = Field(default="medium", max_length=20)
+    source_ip: str | None = Field(default=None, max_length=64)
+    destination_ip: str | None = Field(default=None, max_length=64)
+    summary: str | None = Field(default=None, max_length=2000)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    @field_validator("title")
+    @classmethod
+    def _normalize_title(cls, value: str) -> str:
+        # Collapse any whitespace (including \n, \t, multi-space) into a
+        # single space, then strip the edges. This is what every other
+        # consumer of the title expects: a single-line, trimmed label.
+        import re as _re
+
+        if not isinstance(value, str):
+            raise ValueError("title must be a string")
+        collapsed = _re.sub(r"\s+", " ", value).strip()
+        if not collapsed:
+            raise ValueError("title must not be empty or whitespace-only")
+        return collapsed
+
+
+@router.post("/incidents", response_model=Incident)
+def create_incident(
+    payload: ManualIncidentCreate,
+    session: Annotated[Session, Depends(get_session)],
+) -> Incident:
+    """Create a manual incident record from the operator dashboard."""
+    from datetime import datetime, timezone
+
+    # Generate the next INC-NNNNNN public_id. We use the highest existing
+    # id+1 so the sequence stays roughly sequential even if a previous
+    # record was deleted.
+    last = session.exec(select(Incident).order_by(Incident.id.desc()).limit(1)).first()
+    next_number = (last.id or 0) + 1 if last else 1
+    public_id = f"INC-{next_number:06d}"
+
+    incident = Incident(
+        public_id=public_id,
+        title=payload.title,
+        incident_type=payload.incident_type,
+        severity=payload.severity,
+        confidence=payload.confidence,
+        status="new",
+        source_ip=payload.source_ip,
+        destination_ip=payload.destination_ip,
+        summary=payload.summary or f"Manual incident filed by operator: {payload.title}",
+        first_seen=datetime.now(timezone.utc),
+        last_seen=datetime.now(timezone.utc),
+    )
+    session.add(incident)
+    session.commit()
+    session.refresh(incident)
+    return incident
 
 
 @router.get("/incidents/{incident_id}")
